@@ -52,6 +52,7 @@ They need to be respected, they serve as the source of truth about the project
   - then run `npm run test:e2e`
 - Unsafe pattern:
   - starting `npm run build` and `npm run test:e2e` at the same time
+- When finalizing some codebase change, always verify that the full test suite passes, not only some specific test cases (of course, while doing the changes, you can run only a part of the tests, that's ok).
 
 ## DB Migrations
 
