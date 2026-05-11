@@ -660,6 +660,15 @@ function TransactionDraftRow({
       return;
     }
 
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      if (!isValidDateInput(draft.dateInput)) return;
+      event.preventDefault();
+      dateOverwriteValueRef.current = null;
+      dateOverwriteCaretRef.current = null;
+      bridge.stepTransactionDate(event.key === "ArrowUp" ? 1 : -1);
+      return;
+    }
+
     const input = event.target as HTMLInputElement;
     const currentValue = input?.value ?? "";
     const baseValue = isFullDateInput(dateOverwriteValueRef.current ?? "") ? (dateOverwriteValueRef.current as string) : currentValue;
@@ -1351,6 +1360,21 @@ function formatDigitsAsDateInput(digits: string) {
   if (digits.length <= 2) return digits;
   if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
   return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+}
+
+function isValidDateInput(value: string) {
+  const match = value.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!match) return false;
+  const [, dayStr, monthStr, yearStr] = match;
+  const day = Number(dayStr);
+  const month = Number(monthStr);
+  const year = Number(yearStr);
+  const candidate = new Date(year, month - 1, day);
+  return (
+    candidate.getFullYear() === year &&
+    candidate.getMonth() === month - 1 &&
+    candidate.getDate() === day
+  );
 }
 
 function formatDateHeaderLabel(date: Date) {

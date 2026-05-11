@@ -654,6 +654,16 @@ test("date field uses overwrite typing and tolerates typed separators", async ({
   await expect(dateField).toHaveValue("");
   await page.keyboard.type("11-05-2026");
   await expect(dateField).toHaveValue("11-05-2026");
+
+  await dateField.press("ArrowUp");
+  await expect(dateField).toHaveValue("12-05-2026");
+  await dateField.press("ArrowDown");
+  await expect(dateField).toHaveValue("11-05-2026");
+
+  await dateField.fill("31-02-2026");
+  await expect(dateField).toHaveValue("31-02-2026");
+  await dateField.press("ArrowUp");
+  await expect(dateField).toHaveValue("31-02-2026");
 });
 
 test("pressing enter in a dropdown with a typed match applies the suggestion before committing", async ({ page }) => {

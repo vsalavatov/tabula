@@ -43,6 +43,8 @@ Date field typing behavior:
 * typed `-` separators are tolerated and ignored for replacement (typing continues at the same overwrite position)
 * when the date field is cleared and user types digits only, separators are auto-inserted (`11052026` -> `11-05-2026`)
 * when the date field is cleared and user types separators explicitly, that input is also tolerated (`11-05-2026` stays valid)
+* when date input is valid and date field is focused, `ArrowUp` steps date to next day and `ArrowDown` steps date to previous day
+* when date input is invalid, `ArrowUp`/`ArrowDown` do not change date
 * examples:
   * starting from `11-05-2026`, typing `0507` or `05-07` results in `05-07-2026`
   * starting from `11-05-2026`, typing `1104` results in `11-04-2026`
