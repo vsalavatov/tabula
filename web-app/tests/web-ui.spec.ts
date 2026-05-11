@@ -588,6 +588,74 @@ test("new transaction entry uses current-date and session defaults with keyboard
   await expect(page.getByText("snack")).toBeVisible();
 });
 
+test("date field uses overwrite typing and tolerates typed separators", async ({ page }) => {
+  const expectDateOverwriteCursor = async (expectedStart: number, expectedEnd: number) => {
+    await expect
+      .poll(async () => dateField.evaluate((element) => ({
+        start: (element as HTMLInputElement).selectionStart,
+        end: (element as HTMLInputElement).selectionEnd,
+      })))
+      .toEqual({ start: expectedStart, end: expectedEnd });
+  };
+
+  await freezeDate(page, "2026-05-11T12:00:00.000Z");
+  await page.goto("/");
+
+  const dateField = page.getByLabel("Transaction date");
+  const descriptionField = page.getByLabel("Transaction description");
+
+  await expect(dateField).toBeFocused();
+  await expect(dateField).toHaveValue("11-05-2026");
+  await expectDateOverwriteCursor(0, 1);
+  await page.keyboard.press("Tab");
+  await expect(descriptionField).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dateField).toBeFocused();
+  const selectionAfterShiftTab = await dateField.evaluate((element) => ({
+    start: (element as HTMLInputElement).selectionStart,
+    end: (element as HTMLInputElement).selectionEnd,
+  }));
+  expect(selectionAfterShiftTab).toEqual({ start: 0, end: 1 });
+
+  await page.keyboard.type("0507");
+  await expect(dateField).toHaveValue("05-07-2026");
+
+  await page.reload();
+  await expect(dateField).toBeFocused();
+  await expect(dateField).toHaveValue("11-05-2026");
+  await expectDateOverwriteCursor(0, 1);
+  await page.keyboard.type("05-07");
+  await expect(dateField).toHaveValue("05-07-2026");
+
+  await page.reload();
+  await expect(dateField).toBeFocused();
+  await expect(dateField).toHaveValue("11-05-2026");
+  await expectDateOverwriteCursor(0, 1);
+  await page.keyboard.type("110");
+  const cursorAfter110 = await dateField.evaluate((element) => ({
+    start: (element as HTMLInputElement).selectionStart,
+    end: (element as HTMLInputElement).selectionEnd,
+  }));
+  expect(cursorAfter110).toEqual({ start: 4, end: 5 });
+  await page.keyboard.type("4");
+  await expect(dateField).toHaveValue("11-04-2026");
+
+  await page.reload();
+  await expect(dateField).toBeFocused();
+  await expect(dateField).toHaveValue("11-05-2026");
+  await dateField.press("Control+a");
+  await dateField.press("Backspace");
+  await expect(dateField).toHaveValue("");
+  await page.keyboard.type("11052026");
+  await expect(dateField).toHaveValue("11-05-2026");
+
+  await dateField.press("Control+a");
+  await dateField.press("Backspace");
+  await expect(dateField).toHaveValue("");
+  await page.keyboard.type("11-05-2026");
+  await expect(dateField).toHaveValue("11-05-2026");
+});
+
 test("pressing enter in a dropdown with a typed match applies the suggestion before committing", async ({ page }) => {
   const seededDatabase = await createKeyboardDefaultsDatabaseFile();
   await freezeDate(page, "2025-04-06T12:00:00.000Z");

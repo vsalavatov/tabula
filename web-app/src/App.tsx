@@ -259,13 +259,41 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
   useEffect(() => {
     const focusTarget = state.draft.focusTarget;
     if (!focusTarget) return;
-    const target = fieldRefs.current[focusKey(focusTarget)];
-    if (!target) return;
-    const frame = window.requestAnimationFrame(() => {
+    let cancelled = false;
+    let frame = 0;
+    let attempts = 0;
+    const maxAttempts = 8;
+
+    const applyFocus = () => {
+      if (cancelled) return;
+
+      const target = fieldRefs.current[focusKey(focusTarget)];
+      if (!target) {
+        if (attempts < maxAttempts) {
+          attempts += 1;
+          frame = window.requestAnimationFrame(applyFocus);
+        }
+        return;
+      }
+
       target.focus({ preventScroll: true });
-      target.select?.();
-    });
-    return () => window.cancelAnimationFrame(frame);
+      if (focusTarget.field === "DATE") {
+        setDateCaretToStart(target);
+      } else {
+        target.select?.();
+      }
+
+      if (document.activeElement !== target && attempts < maxAttempts) {
+        attempts += 1;
+        frame = window.requestAnimationFrame(applyFocus);
+      }
+    };
+
+    frame = window.requestAnimationFrame(applyFocus);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
   }, [state.draft.focusTarget?.sequence]);
 
   useEffect(() => {
@@ -578,6 +606,24 @@ function TransactionDraftRow({
 }) {
   const draft = state.draft;
   const editingExisting = draft.mode === "EDIT_EXISTING";
+  const dateFieldPointerDownRef = useRef(false);
+  const dateFieldPendingCaretRef = useRef<number | null>(null);
+  const dateOverwriteValueRef = useRef<string | null>(null);
+  const dateOverwriteCaretRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const pendingCaret = dateFieldPendingCaretRef.current;
+    if (pendingCaret === null) return;
+
+    const dateField = fieldRefs.current[focusKey({ field: "DATE", transferRowIndex: 0 })];
+    if (!dateField || document.activeElement !== dateField) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      setDateOverwriteCursor(dateField, pendingCaret);
+      dateFieldPendingCaretRef.current = null;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [draft.dateInput, fieldRefs]);
 
   const handleCommit = () => {
     const dateField = fieldRefs.current[focusKey({ field: "DATE", transferRowIndex: 0 })];
@@ -595,6 +641,82 @@ function TransactionDraftRow({
       event.preventDefault();
       handleCommit();
     }
+  };
+  const handleDateFieldFocus = (target: HTMLInputElement | HTMLTextAreaElement) => {
+    if (dateFieldPointerDownRef.current) {
+      dateFieldPointerDownRef.current = false;
+      return;
+    }
+
+    setDateCaretToStart(target);
+    if (!isFullDateInput(target.value)) return;
+    dateOverwriteValueRef.current = target.value;
+    dateOverwriteCaretRef.current = 0;
+  };
+  const handleDateFieldKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    const hasModifier = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+    if (event.key === "Enter" || hasModifier) {
+      handleDraftFieldKeyDown(event);
+      return;
+    }
+
+    const input = event.target as HTMLInputElement;
+    const currentValue = input?.value ?? "";
+    const baseValue = isFullDateInput(dateOverwriteValueRef.current ?? "") ? (dateOverwriteValueRef.current as string) : currentValue;
+    if (!isFullDateInput(baseValue)) {
+      dateOverwriteValueRef.current = null;
+      dateOverwriteCaretRef.current = null;
+      handleDraftFieldKeyDown(event);
+      return;
+    }
+
+    const selectionStart = input.selectionStart ?? currentValue.length;
+    const selectionEnd = input.selectionEnd ?? currentValue.length;
+    const startIndex = dateOverwriteCaretRef.current ?? Math.min(selectionStart, selectionEnd);
+    const fullSelection = selectionStart === 0 && selectionEnd === currentValue.length;
+
+    if (event.key === "Backspace" || event.key === "Delete") {
+      if (fullSelection) {
+        event.preventDefault();
+        dateOverwriteValueRef.current = null;
+        dateOverwriteCaretRef.current = null;
+        bridge.updateTransactionDateInput("");
+        return;
+      }
+      dateOverwriteValueRef.current = null;
+      dateOverwriteCaretRef.current = null;
+      handleDraftFieldKeyDown(event);
+      return;
+    }
+
+    if (event.key === "-") {
+      event.preventDefault();
+      setDateOverwriteCursor(input, startIndex);
+      dateOverwriteCaretRef.current = startIndex;
+      return;
+    }
+
+    if (!/^\d$/.test(event.key)) {
+      dateOverwriteValueRef.current = null;
+      dateOverwriteCaretRef.current = null;
+      handleDraftFieldKeyDown(event);
+      return;
+    }
+
+    const replaceIndex = nextDateEditableIndex(startIndex);
+    if (replaceIndex < 0) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    const nextValue = `${baseValue.slice(0, replaceIndex)}${event.key}${baseValue.slice(replaceIndex + 1)}`;
+    const nextCaret = nextDateEditableIndex(replaceIndex + 1);
+    dateOverwriteValueRef.current = nextValue;
+    dateOverwriteCaretRef.current = nextCaret >= 0 ? nextCaret : baseValue.length;
+    setDateOverwriteCursor(input, nextCaret >= 0 ? nextCaret : baseValue.length);
+    dateFieldPendingCaretRef.current = nextCaret >= 0 ? nextCaret : currentValue.length;
+    bridge.updateTransactionDateInput(nextValue);
   };
 
   return (
@@ -622,8 +744,21 @@ function TransactionDraftRow({
             placeholder="dd-mm-yyyy"
             value={draft.dateInput}
             error={draft.dateError}
-            onKeyDown={handleDraftFieldKeyDown}
-            onChange={(event) => bridge.updateTransactionDateInput(event.target.value)}
+            onKeyDown={handleDateFieldKeyDown}
+            onMouseDown={() => {
+              dateFieldPointerDownRef.current = true;
+              dateFieldPendingCaretRef.current = null;
+              dateOverwriteValueRef.current = null;
+              dateOverwriteCaretRef.current = null;
+            }}
+            onFocus={(event) => handleDateFieldFocus(event.target as HTMLInputElement)}
+            onBlur={() => {
+              dateFieldPointerDownRef.current = false;
+              dateFieldPendingCaretRef.current = null;
+              dateOverwriteValueRef.current = null;
+              dateOverwriteCaretRef.current = null;
+            }}
+            onChange={(event) => bridge.updateTransactionDateInput(normalizeTypedDateInput(event.target.value))}
             helperText={draft.dateError ? "Use dd-mm-yyyy" : undefined}
             inputProps={{ "aria-label": "Transaction date" }}
             inputRef={setFieldRef(fieldRefs, "DATE", 0)}
@@ -1173,6 +1308,49 @@ function formatDateInput(isoDate: string) {
   const [year, month, day] = isoDate.split("-");
   if (!year || !month || !day) return "";
   return `${day}-${month}-${year}`;
+}
+
+function isFullDateInput(value: string) {
+  return /^\d{2}-\d{2}-\d{4}$/.test(value);
+}
+
+function setDateCaretToStart(target: HTMLInputElement | HTMLTextAreaElement) {
+  if (!isFullDateInput(target.value)) {
+    target.select?.();
+    return;
+  }
+  setDateOverwriteCursor(target, 0);
+}
+
+function nextDateEditableIndex(start: number) {
+  const editableIndexes = [0, 1, 3, 4, 6, 7, 8, 9];
+  return editableIndexes.find((index) => index >= start) ?? -1;
+}
+
+function setDateOverwriteCursor(target: HTMLInputElement | HTMLTextAreaElement, index: number) {
+  const editableIndex = nextDateEditableIndex(index);
+  if (editableIndex < 0) {
+    target.setSelectionRange?.(target.value.length, target.value.length);
+    return;
+  }
+  target.setSelectionRange?.(editableIndex, editableIndex + 1);
+}
+
+function normalizeTypedDateInput(value: string) {
+  const sanitized = value.replace(/[^\d-]/g, "");
+  const digits = sanitized.replace(/\D/g, "").slice(0, 8);
+  const formatted = formatDigitsAsDateInput(digits);
+
+  if (sanitized.endsWith("-") && (digits.length === 2 || digits.length === 4) && !formatted.endsWith("-")) {
+    return `${formatted}-`;
+  }
+  return formatted;
+}
+
+function formatDigitsAsDateInput(digits: string) {
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
 }
 
 function formatDateHeaderLabel(date: Date) {

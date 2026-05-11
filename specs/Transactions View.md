@@ -35,6 +35,18 @@ With one transfer row, `Tab` order is:
 
 When there are multiple transfer rows, tabbing continues through the same four transfer fields for each row in order.
 
+Date field typing behavior:
+* when the date field receives keyboard/programmatic focus (including initial focus in the composer, and `Shift+Tab` back from description), overwrite cursor starts at the first date character
+* overwrite cursor is shown as a one-character block selection over the next date digit that will be replaced
+* typing works in overwrite mode: typed digits replace existing date digits at caret position, while separators are skipped automatically
+* overwrite cursor advances on every typed digit, even when the typed digit is the same as the existing one
+* typed `-` separators are tolerated and ignored for replacement (typing continues at the same overwrite position)
+* when the date field is cleared and user types digits only, separators are auto-inserted (`11052026` -> `11-05-2026`)
+* when the date field is cleared and user types separators explicitly, that input is also tolerated (`11-05-2026` stays valid)
+* examples:
+  * starting from `11-05-2026`, typing `0507` or `05-07` results in `05-07-2026`
+  * starting from `11-05-2026`, typing `1104` results in `11-04-2026`
+
 `from account`, `unit`, and `to account` fields are searchable dropdowns:
 * while user types, options are filtered by case-insensitive substring match
 * on forward `Tab`, if typed text points to a different first filtered option, that option is applied before focus moves on
