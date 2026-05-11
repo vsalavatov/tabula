@@ -369,9 +369,6 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
         title="Transactions"
         action={
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <Button href="/transaction-register-demo.html" target="_blank" rel="noreferrer" variant="outlined">
-              Open HTML Demo
-            </Button>
             {state.draft.mode === "EDIT_EXISTING" ? (
               <Button onClick={() => bridge.beginNewTransactionEntry()}>New Entry</Button>
             ) : null}
