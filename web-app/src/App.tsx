@@ -268,7 +268,7 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
       if (cancelled) return;
 
       const target = fieldRefs.current[focusKey(focusTarget)];
-      if (!target) {
+      if (!target || !target.isConnected) {
         if (attempts < maxAttempts) {
           attempts += 1;
           frame = window.requestAnimationFrame(applyFocus);
@@ -1242,11 +1242,14 @@ function LookupAutocomplete<T extends Account | Unit>({
       applyTypedCandidate();
     }
     if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      if (applyTypedCandidate()) {
-        event.preventDefault();
-        event.stopPropagation();
+      const appliedTypedCandidate = applyTypedCandidate();
+      event.preventDefault();
+      event.stopPropagation();
+      if (appliedTypedCandidate) {
         return;
       }
+      onKeyDown?.(event);
+      return;
     }
     onKeyDown?.(event);
   };
