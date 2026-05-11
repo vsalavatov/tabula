@@ -1,5 +1,11 @@
 # AGENTS
 
+## Specifications
+
+Specifications are located under `/specs/` directory, they describe different aspects of the project, conventions, user stories, etc. 
+They need to be respected, they serve as the source of truth about the project 
+(perhaps, apart from parts that are not described as specs, in which case it is always a good idea to cover such things with a spec).
+
 ## Project Overview
 
 - `shared-core`
