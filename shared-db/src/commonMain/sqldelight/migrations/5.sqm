@@ -1,0 +1,47 @@
+PRAGMA foreign_keys = 0;
+
+CREATE TABLE Accounts (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    owning INTEGER NOT NULL CHECK (owning == 0 OR owning == 1),
+    archived INTEGER NOT NULL CHECK (archived == 0 OR archived == 1) DEFAULT 0
+);
+
+INSERT INTO Accounts(id, name, owning, archived)
+SELECT id, name, owning, archived
+FROM Stores;
+
+CREATE TABLE Assets_new (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    account INTEGER NOT NULL REFERENCES Accounts(id),
+    unit INTEGER NOT NULL REFERENCES Units(id),
+    quantity REAL NOT NULL,
+    UNIQUE (account, unit)
+);
+
+INSERT INTO Assets_new(id, account, unit, quantity)
+SELECT id, store, unit, quantity
+FROM Assets;
+
+CREATE TABLE Transfers_new (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    transaction_ INTEGER NOT NULL REFERENCES Transactions(id),
+    accountFrom INTEGER NOT NULL REFERENCES Accounts(id),
+    accountTo INTEGER NOT NULL REFERENCES Accounts(id),
+    unit INTEGER NOT NULL REFERENCES Units(id),
+    delta REAL NOT NULL
+);
+
+INSERT INTO Transfers_new(id, transaction_, accountFrom, accountTo, unit, delta)
+SELECT id, transaction_, storeFrom, storeTo, unit, delta
+FROM Transfers;
+
+DROP TABLE Assets;
+ALTER TABLE Assets_new RENAME TO Assets;
+
+DROP TABLE Transfers;
+ALTER TABLE Transfers_new RENAME TO Transfers;
+
+DROP TABLE Stores;
+
+PRAGMA foreign_keys = 1;

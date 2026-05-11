@@ -1,0 +1,1 @@
+ALTER TABLE Stores ADD COLUMN archived INTEGER NOT NULL CHECK (owning == 0 OR owning == 1) DEFAULT 0;

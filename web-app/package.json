@@ -1,0 +1,39 @@
+{
+  "name": "tabula-web-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:kotlin-bridge": "..\\gradlew.bat --project-dir .. :shared-bridge-web:clean :shared-bridge-web:compileDevelopmentExecutableKotlinJs && node ./scripts/sync-kotlin-bridge.mjs",
+    "predev": "npm run build:kotlin-bridge",
+    "dev": "vite",
+    "dev:open": "vite --host 127.0.0.1 --port 4173 --strictPort --open /",
+    "dev:serve": "vite",
+    "prebuild": "npm run build:kotlin-bridge",
+    "build": "vite build",
+    "preview": "vite preview",
+    "pretest:e2e": "npm run build:kotlin-bridge",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@js-joda/core": "^3.2.0",
+    "@emotion/react": "^11.13.0",
+    "@emotion/styled": "^11.13.0",
+    "@mui/icons-material": "^6.1.1",
+    "@mui/material": "^6.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "react-virtuoso": "^4.12.3",
+    "recharts": "^2.12.7",
+    "sql.js": "^1.10.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.2",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}

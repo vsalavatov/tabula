@@ -1,0 +1,8 @@
+getUnits:
+SELECT * FROM Units;
+
+getUnit:
+SELECT * FROM Units WHERE id = ?;
+
+createUnit:
+INSERT INTO Units(name, symbol, mantissaLength) VALUES (?, ?, ?);

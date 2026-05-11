@@ -1,0 +1,16 @@
+getAllStores:
+SELECT * FROM Accounts;
+
+getActualStores:
+SELECT * FROM Accounts WHERE archived == 0;
+
+getStore:
+SELECT * FROM Accounts WHERE id = ?;
+
+createStore:
+INSERT INTO Accounts(name, owning) VALUES (?, ?);
+
+updateStore:
+UPDATE Accounts
+SET name = :name, owning = :owning, archived = :archived
+WHERE id = :id;

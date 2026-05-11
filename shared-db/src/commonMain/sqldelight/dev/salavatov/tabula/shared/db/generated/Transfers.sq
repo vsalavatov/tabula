@@ -1,0 +1,8 @@
+createTransfer:
+INSERT INTO Transfers(transaction_, accountFrom, accountTo, unit, delta) VALUES (?, ?, ?, ?, ?);
+
+forTransaction:
+SELECT * FROM Transfers WHERE transaction_ = ?;
+
+forStore:
+SELECT * FROM Transfers JOIN Transactions WHERE Transfers.accountFrom = :account OR Transfers.accountTo = :account;

@@ -1,0 +1,77 @@
+getTransactions:
+SELECT * FROM Transactions ORDER BY timestamp DESC;
+
+getTransactionsWithDetailsWindow:
+WITH visible_transactions AS (
+  SELECT id, timestamp, description
+  FROM Transactions
+  ORDER BY timestamp DESC, id DESC
+  LIMIT ? OFFSET ?
+)
+SELECT
+  t.id AS "transaction_id",
+  t.timestamp AS "transaction_timestamp",
+  t.description AS "transaction_description",
+  tr.id AS "transfer_id",
+  tr.delta AS "transfer_delta",
+  sf.id AS "account_from_id",
+  sf.name AS "account_from_name",
+  sf.owning AS "account_from_owning",
+  sf.archived AS "account_from_archived",
+  st.id AS "account_to_id",
+  st.name AS "account_to_name",
+  st.owning AS "account_to_owning",
+  st.archived AS "account_to_archived",
+  u.id AS "unit_id",
+  u.name AS "unit_name",
+  u.symbol AS "unit_symbol",
+  u.mantissaLength AS "unit_mantissa_length"
+FROM visible_transactions t
+JOIN Transfers tr ON t.id = tr.transaction_
+JOIN Accounts sf ON tr.accountFrom = sf.id
+JOIN Accounts st ON tr.accountTo = st.id
+JOIN Units u ON tr.unit = u.id
+ORDER BY t.timestamp DESC, t.id DESC, tr.id;
+
+countTransactions:
+SELECT COUNT(*) FROM Transactions;
+
+countTransactionsNewerThan:
+SELECT COUNT(*)
+FROM Transactions candidate
+JOIN Transactions current ON current.id = ?
+WHERE candidate.timestamp > current.timestamp
+   OR (candidate.timestamp = current.timestamp AND candidate.id > current.id);
+
+getTransactionTimestampAtOffset:
+SELECT timestamp
+FROM Transactions
+ORDER BY timestamp DESC, id DESC
+LIMIT 1 OFFSET ?;
+
+getLatestTimestampOnDate:
+SELECT MAX(timestamp) AS latest_timestamp
+FROM Transactions
+WHERE timestamp >= ? AND timestamp < ?
+  AND id != ?;
+
+createTransaction:
+INSERT INTO Transactions(timestamp, description) VALUES (?, ?);
+
+updateTransaction:
+UPDATE Transactions
+SET timestamp = ?, description = ?
+WHERE id = ?;
+
+deleteTransaction:
+DELETE FROM Transactions
+WHERE id = ?;
+
+getCreatedTransaction:
+SELECT * FROM Transactions WHERE id = last_insert_rowid();
+
+getTransactionById:
+SELECT * FROM Transactions WHERE id = ?;
+
+deleteTransfersByTransactionId:
+DELETE FROM Transfers WHERE transaction_ = ?;

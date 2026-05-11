@@ -1,0 +1,36 @@
+PRAGMA foreign_keys = 0;
+
+ALTER TABLE Resources RENAME TO Units;
+
+CREATE TABLE Assets_new (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    store INTEGER NOT NULL REFERENCES Stores(id),
+    unit INTEGER NOT NULL REFERENCES Units(id),
+    quantity REAL NOT NULL,
+    UNIQUE (store, unit)
+);
+
+INSERT INTO Assets_new(id, store, unit, quantity)
+SELECT id, store, resource, amount
+FROM Assets;
+
+DROP TABLE Assets;
+ALTER TABLE Assets_new RENAME TO Assets;
+
+CREATE TABLE Transfers_new (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    transaction_ INTEGER NOT NULL REFERENCES Transactions(id),
+    storeFrom INTEGER NOT NULL REFERENCES Stores(id),
+    storeTo INTEGER NOT NULL REFERENCES Stores(id),
+    unit INTEGER NOT NULL REFERENCES Units(id),
+    delta REAL NOT NULL
+);
+
+INSERT INTO Transfers_new(id, transaction_, storeFrom, storeTo, unit, delta)
+SELECT id, transaction_, storeFrom, storeTo, resource, delta
+FROM Transfers;
+
+DROP TABLE Transfers;
+ALTER TABLE Transfers_new RENAME TO Transfers;
+
+PRAGMA foreign_keys = 1;

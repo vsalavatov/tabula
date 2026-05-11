@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS Transfers (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    transaction_ INTEGER NOT NULL REFERENCES Transactions(id),
+    storeFrom INTEGER NOT NULL REFERENCES Stores(id),
+    storeTo INTEGER NOT NULL REFERENCES Stores(id),
+    resource INTEGER NOT NULL REFERENCES Resources(id),
+    delta REAL NOT NULL
+);
+
+INSERT INTO Transfers(transaction_, storeFrom, storeTo, resource, delta)
+SELECT td1.transaction_, td1.store, td2.store, td1.resource, td2.delta
+FROM TransactionDeltas td1
+JOIN TransactionDeltas td2
+    ON td1.transaction_ == td2.transaction_ AND
+       td1.delta < 0 AND td2.delta > 0 AND
+        td1.delta == -td2.delta AND
+        td1.resource == td2.resource;
+
+DROP TABLE TransactionDeltas;

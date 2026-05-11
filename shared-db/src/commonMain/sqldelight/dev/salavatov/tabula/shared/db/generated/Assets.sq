@@ -1,0 +1,20 @@
+forStore:
+SELECT * FROM Assets WHERE account = ?;
+
+getAllAssets:
+SELECT * FROM Assets;
+
+createAsset:
+INSERT INTO Assets(account, unit, quantity) VALUES (?, ?, ?);
+
+applyDelta:
+INSERT INTO Assets(account, unit, quantity) VALUES (:account, :unit, :delta)
+ON CONFLICT(account, unit) DO UPDATE SET quantity = quantity + :delta;
+
+calculateQuantityFromTransactionLog:
+SELECT SUM(total) total FROM
+(
+SELECT SUM(Transfers.delta) total FROM Transfers WHERE Transfers.accountTo = :account AND Transfers.unit = :unit
+UNION ALL
+SELECT SUM(-Transfers.delta) total FROM Transfers WHERE Transfers.accountFrom = :account AND Transfers.unit = :unit
+);
