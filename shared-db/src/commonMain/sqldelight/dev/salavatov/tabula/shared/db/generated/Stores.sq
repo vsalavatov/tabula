@@ -8,9 +8,9 @@ getStore:
 SELECT * FROM Accounts WHERE id = ?;
 
 createStore:
-INSERT INTO Accounts(name, owning) VALUES (?, ?);
+INSERT INTO Accounts(name, in_possession) VALUES (?, ?);
 
 updateStore:
 UPDATE Accounts
-SET name = :name, owning = :owning, archived = :archived
+SET name = :name, in_possession = :in_possession, archived = :archived
 WHERE id = :id;

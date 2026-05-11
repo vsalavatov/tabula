@@ -23,8 +23,8 @@ interface UnitRepository {
 interface AccountRepository {
   fun getActiveAccounts(): Flow<List<Account>>
   fun getAccountDetails(showArchived: Boolean): Flow<List<EditableAccount>>
-  suspend fun createAccount(name: String, owning: Boolean): Long
-  suspend fun updateAccount(id: Long, name: String, owning: Boolean, archived: Boolean)
+  suspend fun createAccount(name: String, inPossession: Boolean): Long
+  suspend fun updateAccount(id: Long, name: String, inPossession: Boolean, archived: Boolean)
   suspend fun checkConsistency(): ConsistencyCheckResult
   suspend fun isArchivingAllowed(accountId: Long): Boolean
 }

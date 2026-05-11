@@ -32,10 +32,10 @@ data class TransferRecord(
   }
 }
 
-data class AccountRecord(val id: Long, val name: String, val owning: Boolean, val archived: Boolean) {
+data class AccountRecord(val id: Long, val name: String, val inPossession: Boolean, val archived: Boolean) {
   companion object {
-    fun deserialize(id: Long, name: String, owning: Long, archived: Long): AccountRecord =
-      AccountRecord(id, name, owning != 0L, archived != 0L)
+    fun deserialize(id: Long, name: String, inPossession: Long, archived: Long): AccountRecord =
+      AccountRecord(id, name, inPossession != 0L, archived != 0L)
   }
 }
 
@@ -53,7 +53,7 @@ data class AssetRecord(val id: Long, val account: Long, val unit: Long, val quan
   }
 }
 
-fun AccountRecord.toDomainModel() = Account(id = id, name = name, owning = owning, isArchived = archived)
+fun AccountRecord.toDomainModel() = Account(id = id, name = name, inPossession = inPossession, isArchived = archived)
 
 fun UnitRecord.toDomainModel() = MeasureUnit(id = id, name = name, symbol = symbol, mantissaLength = mantissaLength)
 
@@ -123,7 +123,7 @@ internal fun List<AccountRecord>.toEditableAccounts(db: TabulaSharedDatabase): L
       account = account.toDomainModel(),
       assets = assets,
       nameInput = account.name,
-      owningInput = account.owning,
+      inPossessionInput = account.inPossession,
       archivedInput = account.archived,
     )
   }
@@ -150,7 +150,7 @@ internal fun List<AccountRecord>.toEditableAccounts(
       account = account.toDomainModel(),
       assets = visibleAssets,
       nameInput = account.name,
-      owningInput = account.owning,
+      inPossessionInput = account.inPossession,
       archivedInput = account.archived,
     )
   }

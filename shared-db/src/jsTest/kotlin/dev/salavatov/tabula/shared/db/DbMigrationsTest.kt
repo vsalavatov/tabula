@@ -34,6 +34,11 @@ class DbMigrationsTest {
     assertMigrationPreservesData(version = 5, schemaStatements = version5DatabaseSchemaStatements())
   }
 
+  @Test
+  fun migratesVersion6DatabaseToAccountsUnitsAndQuantitySchema(): Promise<Unit> = GlobalScope.promise {
+    assertMigrationPreservesData(version = 6, schemaStatements = version6DatabaseSchemaStatements())
+  }
+
   private suspend fun assertMigrationPreservesData(version: Long, schemaStatements: List<String>) {
     val driver = SqlJsDriver.open()
     try {
@@ -43,7 +48,7 @@ class DbMigrationsTest {
       val database = DbMigrations(driver).prepareDatabase()
       assertNotNull(database)
 
-      assertEquals(6L, queryLong(driver, "PRAGMA user_version"))
+      assertEquals(7L, queryLong(driver, "PRAGMA user_version"))
       assertEquals(1L, queryLong(driver, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'Units'"))
       assertEquals(0L, queryLong(driver, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'Resources'"))
       assertEquals(1L, queryLong(driver, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'Accounts'"))
@@ -58,6 +63,9 @@ class DbMigrationsTest {
       assertEquals(1L, queryLong(driver, "SELECT accountFrom FROM Transfers WHERE id = 1"))
       assertEquals(2L, queryLong(driver, "SELECT accountTo FROM Transfers WHERE id = 1"))
       assertEquals("Wallet", queryString(driver, "SELECT name FROM Accounts WHERE id = 1"))
+      assertEquals(1L, queryLong(driver, "SELECT in_possession FROM Accounts WHERE id = 1"))
+      assertEquals(1L, queryLong(driver, "SELECT COUNT(*) FROM pragma_table_info('Accounts') WHERE name = 'in_possession'"))
+      assertEquals(0L, queryLong(driver, "SELECT COUNT(*) FROM pragma_table_info('Accounts') WHERE name = 'owning'"))
       assertNull(queryString(driver, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'TransactionDeltas'"))
     } finally {
       driver.close()
@@ -217,6 +225,57 @@ class DbMigrationsTest {
     "INSERT INTO Assets(id, store, unit, quantity) VALUES (1, 1, 1, 42.5)",
     "INSERT INTO Transactions(id, timestamp, description) VALUES (1, 1712366400000, 'Lunch')",
     "INSERT INTO Transfers(id, transaction_, storeFrom, storeTo, unit, delta) VALUES (1, 1, 1, 2, 1, 12.5)",
+  )
+
+  private fun version6DatabaseSchemaStatements(): List<String> = listOf(
+    """
+      CREATE TABLE Units (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          symbol TEXT NOT NULL,
+          mantissaLength INTEGER NOT NULL
+      )
+    """.trimIndent(),
+    """
+      CREATE TABLE Accounts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          owning INTEGER NOT NULL CHECK (owning == 0 OR owning == 1),
+          archived INTEGER NOT NULL CHECK (archived == 0 OR archived == 1) DEFAULT 0
+      )
+    """.trimIndent(),
+    """
+      CREATE TABLE Assets (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          account INTEGER NOT NULL REFERENCES Accounts(id),
+          unit INTEGER NOT NULL REFERENCES Units(id),
+          quantity REAL NOT NULL,
+          UNIQUE (account, unit)
+      )
+    """.trimIndent(),
+    """
+      CREATE TABLE Transactions (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          timestamp INTEGER NOT NULL,
+          description TEXT NOT NULL
+      )
+    """.trimIndent(),
+    """
+      CREATE TABLE Transfers (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          transaction_ INTEGER NOT NULL REFERENCES Transactions(id),
+          accountFrom INTEGER NOT NULL REFERENCES Accounts(id),
+          accountTo INTEGER NOT NULL REFERENCES Accounts(id),
+          unit INTEGER NOT NULL REFERENCES Units(id),
+          delta REAL NOT NULL
+      )
+    """.trimIndent(),
+    "INSERT INTO Units(id, name, symbol, mantissaLength) VALUES (1, 'Euro', 'EUR', 2)",
+    "INSERT INTO Accounts(id, name, owning, archived) VALUES (1, 'Wallet', 1, 0)",
+    "INSERT INTO Accounts(id, name, owning, archived) VALUES (2, 'External', 0, 0)",
+    "INSERT INTO Assets(id, account, unit, quantity) VALUES (1, 1, 1, 42.5)",
+    "INSERT INTO Transactions(id, timestamp, description) VALUES (1, 1712366400000, 'Lunch')",
+    "INSERT INTO Transfers(id, transaction_, accountFrom, accountTo, unit, delta) VALUES (1, 1, 1, 2, 1, 12.5)",
   )
 
   private fun execute(driver: SqlDriver, sql: String) {

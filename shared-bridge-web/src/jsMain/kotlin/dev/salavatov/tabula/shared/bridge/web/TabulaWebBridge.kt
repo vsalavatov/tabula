@@ -207,7 +207,7 @@ class TabulaWebBridge(
   fun createUnit() = unitPresenter.createUnit { persistLocalSnapshot() }
   fun toggleShowArchived(showArchived: Boolean) = accountPresenter.toggleShowArchived(showArchived)
   fun updateNewAccountName(name: String) = accountPresenter.updateNewAccountName(name)
-  fun updateNewAccountOwning(owning: Boolean) = accountPresenter.updateNewAccountOwning(owning)
+  fun updateNewAccountInPossession(inPossession: Boolean) = accountPresenter.updateNewAccountInPossession(inPossession)
   fun createAccount() = accountPresenter.createAccount { persistLocalSnapshot() }
   fun checkConsistency() = accountPresenter.checkConsistency()
   fun clearConsistencyResult() = accountPresenter.clearConsistencyResult()
@@ -264,8 +264,8 @@ class TabulaWebBridge(
     accountPresenter.updateAccountName(accountId.toLong(), name)
   }
 
-  fun updateAccountOwning(accountId: Double, owning: Boolean) {
-    accountPresenter.updateAccountOwning(accountId.toLong(), owning)
+  fun updateAccountInPossession(accountId: Double, inPossession: Boolean) {
+    accountPresenter.updateAccountInPossession(accountId.toLong(), inPossession)
   }
 
   fun updateAccountArchived(accountId: Double, archived: Boolean) {

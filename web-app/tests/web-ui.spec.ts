@@ -377,11 +377,11 @@ async function createUnit(page: Page, name: string, symbol: string, mantissaLeng
   await expect(page.getByRole("heading", { name }).first()).toBeVisible();
 }
 
-async function createAccount(page: Page, name: string, owning = true) {
+async function createAccount(page: Page, name: string, inPossession = true) {
   await gotoTab(page, "Accounts");
-  const owningCheckbox = page.getByLabel("Owning");
-  if ((await owningCheckbox.isChecked()) !== owning) {
-    await owningCheckbox.click();
+  const inPossessionCheckbox = page.getByLabel("In possession");
+  if ((await inPossessionCheckbox.isChecked()) !== inPossession) {
+    await inPossessionCheckbox.click();
   }
   await page.getByLabel("New account").fill(name);
   await page.getByRole("button", { name: /create account/i }).click();

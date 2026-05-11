@@ -1,0 +1,17 @@
+PRAGMA foreign_keys = 0;
+
+CREATE TABLE Accounts_new (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    in_possession INTEGER NOT NULL CHECK (in_possession == 0 OR in_possession == 1),
+    archived INTEGER NOT NULL CHECK (archived == 0 OR archived == 1) DEFAULT 0
+);
+
+INSERT INTO Accounts_new(id, name, in_possession, archived)
+SELECT id, name, owning, archived
+FROM Accounts;
+
+DROP TABLE Accounts;
+ALTER TABLE Accounts_new RENAME TO Accounts;
+
+PRAGMA foreign_keys = 1;

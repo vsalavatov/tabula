@@ -43,7 +43,7 @@ data class Transfer(
 data class Account(
   val id: Long,
   val name: String,
-  val owning: Boolean,
+  val inPossession: Boolean,
   val isArchived: Boolean = false,
 )
 
@@ -200,7 +200,7 @@ data class EditableAccount(
   val assets: List<AccountAssetInfo> = emptyList(),
   val editMode: Boolean = false,
   val nameInput: String = account.name,
-  val owningInput: Boolean = account.owning,
+  val inPossessionInput: Boolean = account.inPossession,
   val archivedInput: Boolean = account.isArchived,
   val showArchivedError: Boolean = false,
 )
@@ -219,7 +219,7 @@ data class ConsistencyCheckResult(
 @Serializable
 data class AccountFormState(
   val name: String = "",
-  val owning: Boolean = true,
+  val inPossession: Boolean = true,
 )
 
 @Serializable

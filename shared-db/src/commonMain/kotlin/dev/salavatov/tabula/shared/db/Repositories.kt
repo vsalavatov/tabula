@@ -170,8 +170,8 @@ class TransactionRepositoryImpl(
       }
       val transfer = Transfer(
         id = row.transfer_id,
-        accountFrom = Account(row.account_from_id, row.account_from_name, row.account_from_owning != 0L, row.account_from_archived != 0L),
-        accountTo = Account(row.account_to_id, row.account_to_name, row.account_to_owning != 0L, row.account_to_archived != 0L),
+        accountFrom = Account(row.account_from_id, row.account_from_name, row.account_from_in_possession != 0L, row.account_from_archived != 0L),
+        accountTo = Account(row.account_to_id, row.account_to_name, row.account_to_in_possession != 0L, row.account_to_archived != 0L),
         unit = MeasureUnit(row.unit_id, row.unit_name, row.unit_symbol, row.unit_mantissa_length.toInt()),
         quantity = row.transfer_delta,
       )
@@ -232,15 +232,15 @@ class AccountRepositoryImpl(
     }
     .flowOn(Dispatchers.Default)
 
-  override suspend fun createAccount(name: String, owning: Boolean): Long = withContext(Dispatchers.Default) {
+  override suspend fun createAccount(name: String, inPossession: Boolean): Long = withContext(Dispatchers.Default) {
     val db = databaseFlow.value ?: error("Database is not available")
-    db.storesQueries.createStore(name, if (owning) 1L else 0L)
+    db.storesQueries.createStore(name, if (inPossession) 1L else 0L)
     db.storesQueries.getAllStores(AccountRecord::deserialize).executeAsList().lastOrNull()?.id ?: -1L
   }
 
-  override suspend fun updateAccount(id: Long, name: String, owning: Boolean, archived: Boolean) = withContext(Dispatchers.Default) {
+  override suspend fun updateAccount(id: Long, name: String, inPossession: Boolean, archived: Boolean) = withContext(Dispatchers.Default) {
     val db = databaseFlow.value ?: error("Database is not available")
-    db.storesQueries.updateStore(name, if (owning) 1L else 0L, if (archived) 1L else 0L, id)
+    db.storesQueries.updateStore(name, if (inPossession) 1L else 0L, if (archived) 1L else 0L, id)
   }
 
   override suspend fun checkConsistency(): ConsistencyCheckResult = withContext(Dispatchers.Default) {

@@ -623,8 +623,8 @@ class AccountPresenter(
     _state.update { it.copy(form = it.form.copy(name = name)) }
   }
 
-  fun updateNewAccountOwning(owning: Boolean) {
-    _state.update { it.copy(form = it.form.copy(owning = owning)) }
+  fun updateNewAccountInPossession(inPossession: Boolean) {
+    _state.update { it.copy(form = it.form.copy(inPossession = inPossession)) }
   }
 
   fun createAccount(onSuccess: suspend () -> Unit = {}) {
@@ -634,7 +634,7 @@ class AccountPresenter(
     }
     scope.launch {
       runCatching {
-        accountRepository.createAccount(form.name, form.owning)
+        accountRepository.createAccount(form.name, form.inPossession)
         _state.update { it.copy(form = AccountFormState(), error = null) }
         onSuccess()
       }.onFailure { error ->
@@ -651,7 +651,7 @@ class AccountPresenter(
             account.copy(
               editMode = enabled,
               nameInput = if (enabled) account.account.name else account.nameInput,
-              owningInput = if (enabled) account.account.owning else account.owningInput,
+              inPossessionInput = if (enabled) account.account.inPossession else account.inPossessionInput,
               archivedInput = if (enabled) account.account.isArchived else account.archivedInput,
               showArchivedError = false,
             )
@@ -669,9 +669,9 @@ class AccountPresenter(
     }
   }
 
-  fun updateAccountOwning(accountId: Long, owning: Boolean) {
+  fun updateAccountInPossession(accountId: Long, inPossession: Boolean) {
     _state.update { state ->
-      state.copy(accounts = state.accounts.map { if (it.account.id == accountId) it.copy(owningInput = owning) else it })
+      state.copy(accounts = state.accounts.map { if (it.account.id == accountId) it.copy(inPossessionInput = inPossession) else it })
     }
   }
 
@@ -700,7 +700,7 @@ class AccountPresenter(
     val account = _state.value.accounts.firstOrNull { it.account.id == accountId } ?: return
     scope.launch {
       runCatching {
-        accountRepository.updateAccount(accountId, account.nameInput, account.owningInput, account.archivedInput)
+        accountRepository.updateAccount(accountId, account.nameInput, account.inPossessionInput, account.archivedInput)
         _state.update { state ->
           state.copy(
             accounts = state.accounts.map {

@@ -384,9 +384,9 @@ class TransactionPresenterTest {
 
     override fun getAccountDetails(showArchived: Boolean): Flow<List<EditableAccount>> = flowOf(emptyList())
 
-    override suspend fun createAccount(name: String, owning: Boolean): Long = 0L
+    override suspend fun createAccount(name: String, inPossession: Boolean): Long = 0L
 
-    override suspend fun updateAccount(id: Long, name: String, owning: Boolean, archived: Boolean) {}
+    override suspend fun updateAccount(id: Long, name: String, inPossession: Boolean, archived: Boolean) {}
 
     override suspend fun checkConsistency(): ConsistencyCheckResult = ConsistencyCheckResult()
 
@@ -419,7 +419,7 @@ class TransactionPresenterTest {
       return CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
     }
 
-    fun account(id: Long, name: String) = Account(id = id, name = name, owning = true)
+    fun account(id: Long, name: String) = Account(id = id, name = name, inPossession = true)
 
     fun measureUnit(id: Long, name: String, symbol: String) = MeasureUnit(
       id = id,

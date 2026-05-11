@@ -138,7 +138,7 @@ const emptyUnitsState: UnitsState = {
 
 const emptyAccountsState: AccountsState = {
   accounts: [],
-  form: { name: "", owning: true },
+  form: { name: "", inPossession: true },
   showArchived: false,
   isLoading: false,
   consistencyResult: null,
@@ -832,7 +832,7 @@ function AccountsPage({ bridge, state }: { bridge: TabulaBridge; state: Accounts
       <Paper sx={{ p: 2 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
           <TextField fullWidth label="New account" value={state.form.name} onChange={(event) => bridge.updateNewAccountName(event.target.value)} />
-          <FormControlLabel control={<Checkbox checked={state.form.owning} onChange={(event) => bridge.updateNewAccountOwning(event.target.checked)} />} label="Owning" />
+          <FormControlLabel control={<Checkbox checked={state.form.inPossession} onChange={(event) => bridge.updateNewAccountInPossession(event.target.checked)} />} label="In possession" />
           <Button variant="contained" onClick={() => bridge.createAccount()}>Create Account</Button>
         </Stack>
       </Paper>
@@ -845,7 +845,7 @@ function AccountsPage({ bridge, state }: { bridge: TabulaBridge; state: Accounts
                   {item.editMode ? (
                     <Stack spacing={1}>
                       <TextField value={item.nameInput} onChange={(event) => bridge.updateAccountName(item.account.id, event.target.value)} />
-                      <FormControlLabel control={<Checkbox checked={item.owningInput} onChange={(event) => bridge.updateAccountOwning(item.account.id, event.target.checked)} />} label="Owning" />
+                      <FormControlLabel control={<Checkbox checked={item.inPossessionInput} onChange={(event) => bridge.updateAccountInPossession(item.account.id, event.target.checked)} />} label="In possession" />
                       <FormControlLabel control={<Checkbox checked={item.archivedInput} onChange={(event) => bridge.updateAccountArchived(item.account.id, event.target.checked)} />} label="Archived" />
                       {item.showArchivedError ? <Alert severity="warning">Account cannot be archived while it has assets.</Alert> : null}
                     </Stack>
@@ -853,7 +853,7 @@ function AccountsPage({ bridge, state }: { bridge: TabulaBridge; state: Accounts
                     <>
                       <Typography variant="h6">{item.account.name}</Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {item.account.owning ? "Owning" : "External"}{item.account.isArchived ? " • Archived" : ""}
+                        {item.account.inPossession ? "In possession" : "External"}{item.account.isArchived ? " • Archived" : ""}
                       </Typography>
                       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
                         {item.assets.map((asset) => <Alert key={`${item.account.id}-${asset.unitId}`} severity="info">{asset.repr}</Alert>)}

@@ -10,7 +10,7 @@ export type AnalyticsTimeRange =
 export interface Account {
   id: number;
   name: string;
-  owning: boolean;
+  inPossession: boolean;
   isArchived: boolean;
 }
 
@@ -116,11 +116,11 @@ export interface AccountsState {
     assets: Array<{ unitId: number; unitName: string; repr: string }>;
     editMode: boolean;
     nameInput: string;
-    owningInput: boolean;
+    inPossessionInput: boolean;
     archivedInput: boolean;
     showArchivedError: boolean;
   }>;
-  form: { name: string; owning: boolean };
+  form: { name: string; inPossession: boolean };
   showArchived: boolean;
   isLoading: boolean;
   consistencyResult: { inconsistencies: Array<{ assetDesc: string; diff: number }> } | null;
@@ -193,11 +193,11 @@ export interface TabulaBridge {
   createUnit(): void;
   toggleShowArchived(showArchived: boolean): void;
   updateNewAccountName(value: string): void;
-  updateNewAccountOwning(value: boolean): void;
+  updateNewAccountInPossession(value: boolean): void;
   createAccount(): void;
   toggleAccountEditMode(accountId: number, enabled: boolean): void;
   updateAccountName(accountId: number, value: string): void;
-  updateAccountOwning(accountId: number, value: boolean): void;
+  updateAccountInPossession(accountId: number, value: boolean): void;
   updateAccountArchived(accountId: number, value: boolean): void;
   applyAccountEdits(accountId: number): void;
   checkConsistency(): void;
