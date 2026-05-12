@@ -14,3 +14,12 @@ Important: it is to be expected that users of the application may use older vers
 User's data must not be lost (unless it's really an intentional change), and should be properly migrated when the schema changes.
 
 Schema changes must be covered with migration unit-tests.
+
+## E2E test database fixtures
+
+Playwright E2E tests that require seeded SQLite files should use shared test utilities under `web-app/tests/support/` instead of embedding raw schema creation SQL inside individual spec files.
+
+The utility module is responsible for:
+- creating the base schema fixture shape used by tests
+- applying per-test seed data
+- exporting uploadable `.db` files in the format expected by the sync import flow
