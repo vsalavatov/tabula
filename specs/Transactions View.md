@@ -51,8 +51,10 @@ Date field typing behavior:
 
 `from account`, `unit`, and `to account` fields are searchable dropdowns:
 * while user types, options are filtered by case-insensitive substring match
-* on forward `Tab`, if typed text points to a different first filtered option, that option is applied before focus moves on
-* on `Enter`, if typed text points to a different first filtered option, that option is applied and the key press is consumed (no transaction save)
+* on forward `Tab`, if typed text points to a different candidate, the highlighted option is applied before focus moves on (fallback: first filtered option)
+* on `Enter`, if typed text points to a different candidate, that candidate is applied and the key press is consumed (no transaction save)
+* when dropdown option highlight is moved with arrow keys, `Enter` and `Space` apply the highlighted option (not forcibly the first filtered one)
+* in searchable dropdown fields, `Enter` and `Space` that apply a candidate are consumed and do not move focus
 
 Transaction save via keyboard:
 * pressing `Enter` in any field saves the transaction draft

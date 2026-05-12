@@ -123,6 +123,74 @@ async function createKeyboardDefaultsDatabaseFile(): Promise<{
   };
 }
 
+async function createSavingsAutocompleteDatabaseFile(): Promise<{
+  name: string;
+  mimeType: string;
+  buffer: Buffer;
+}> {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database();
+  db.exec(`
+    CREATE TABLE Units (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      mantissaLength INTEGER NOT NULL
+    );
+    CREATE TABLE Accounts (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      owning INTEGER NOT NULL CHECK (owning == 0 OR owning == 1),
+      archived INTEGER NOT NULL CHECK (archived == 0 OR archived == 1) DEFAULT 0
+    );
+    CREATE TABLE Assets (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      account INTEGER NOT NULL REFERENCES Accounts(id),
+      unit INTEGER NOT NULL REFERENCES Units(id),
+      quantity REAL NOT NULL,
+      UNIQUE (account, unit)
+    );
+    CREATE TABLE Transactions (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      timestamp INTEGER NOT NULL,
+      description TEXT NOT NULL
+    );
+    CREATE TABLE Transfers (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      transaction_ INTEGER NOT NULL REFERENCES Transactions(id),
+      accountFrom INTEGER NOT NULL REFERENCES Accounts(id),
+      accountTo INTEGER NOT NULL REFERENCES Accounts(id),
+      unit INTEGER NOT NULL REFERENCES Units(id),
+      delta REAL NOT NULL
+    );
+    INSERT INTO Units (id, name, symbol, mantissaLength) VALUES (1, 'Euro', 'EUR', 2);
+    INSERT INTO Accounts (id, name, owning, archived) VALUES
+      (1, 'Income', 1, 0),
+      (2, 'Savings', 1, 0),
+      (3, 'Savings for car', 1, 0),
+      (4, 'Savings for house', 1, 0),
+      (5, 'External', 0, 0);
+    INSERT INTO Assets (account, unit, quantity) VALUES
+      (1, 1, 100),
+      (2, 1, 0),
+      (3, 1, 0),
+      (4, 1, 0),
+      (5, 1, -100);
+    INSERT INTO Transactions (id, timestamp, description) VALUES
+      (1, 1743850800000, 'seed salary');
+    INSERT INTO Transfers (id, transaction_, accountFrom, accountTo, unit, delta) VALUES
+      (1, 1, 1, 5, 1, 100);
+    PRAGMA user_version = 6;
+  `);
+  const exported = db.export();
+  db.close();
+  return {
+    name: "savings-autocomplete.db",
+    mimeType: "application/x-sqlite3",
+    buffer: Buffer.from(exported),
+  };
+}
+
 async function createLongRegisterDatabaseFile(): Promise<{
   name: string;
   mimeType: string;
@@ -692,6 +760,81 @@ test("pressing enter in a dropdown with a typed match applies the suggestion bef
   await expect(fromStoreField).toHaveValue("groceries");
   await expect(quantityField).not.toBeFocused();
   await expect(page.locator('[data-date-iso="2025-04-06"]')).toHaveCount(0);
+});
+
+test("pressing enter after arrow navigation in account dropdown applies highlighted savings option", async ({ page }) => {
+  const seededDatabase = await createSavingsAutocompleteDatabaseFile();
+  await freezeDate(page, "2025-04-06T12:00:00.000Z");
+  await page.goto("/");
+
+  await loadDatabaseFile(page, seededDatabase);
+  await gotoTab(page, "Transactions");
+
+  const fromStoreField = page.getByRole("combobox", { name: "Transfer 1 from account", exact: true });
+  const quantityField = page.getByLabel("Transfer 1 quantity");
+
+  await expect(fromStoreField).toHaveValue("Income");
+  await fromStoreField.click();
+  await fromStoreField.fill("savings");
+  await expect(page.getByRole("option", { name: "Savings", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Savings for car", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Savings for house", exact: true })).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+
+  await expect(fromStoreField).toHaveValue("Savings for house");
+  await expect(quantityField).not.toBeFocused();
+});
+
+test("pressing space after arrow navigation in account dropdown applies highlighted savings option", async ({ page }) => {
+  const seededDatabase = await createSavingsAutocompleteDatabaseFile();
+  await freezeDate(page, "2025-04-06T12:00:00.000Z");
+  await page.goto("/");
+
+  await loadDatabaseFile(page, seededDatabase);
+  await gotoTab(page, "Transactions");
+
+  const fromStoreField = page.getByRole("combobox", { name: "Transfer 1 from account", exact: true });
+  const quantityField = page.getByLabel("Transfer 1 quantity");
+
+  await expect(fromStoreField).toHaveValue("Income");
+  await fromStoreField.click();
+  await fromStoreField.fill("savings");
+  await expect(page.getByRole("option", { name: "Savings", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Savings for car", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Savings for house", exact: true })).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press(" ");
+
+  await expect(fromStoreField).toHaveValue("Savings for house");
+  await expect(quantityField).not.toBeFocused();
+});
+
+test("pressing tab after arrow navigation in account dropdown applies highlighted savings option and advances focus", async ({ page }) => {
+  const seededDatabase = await createSavingsAutocompleteDatabaseFile();
+  await freezeDate(page, "2025-04-06T12:00:00.000Z");
+  await page.goto("/");
+
+  await loadDatabaseFile(page, seededDatabase);
+  await gotoTab(page, "Transactions");
+
+  const fromStoreField = page.getByRole("combobox", { name: "Transfer 1 from account", exact: true });
+  const quantityField = page.getByLabel("Transfer 1 quantity");
+
+  await expect(fromStoreField).toHaveValue("Income");
+  await fromStoreField.click();
+  await fromStoreField.fill("savings");
+  await expect(page.getByRole("option", { name: "Savings", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Savings for car", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Savings for house", exact: true })).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Tab");
+
+  await expect(fromStoreField).toHaveValue("Savings for house");
+  await expect(quantityField).toBeFocused();
 });
 
 test("new transaction composer stays visible while scrolling older transactions", async ({ page }) => {

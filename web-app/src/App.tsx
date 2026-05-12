@@ -1213,6 +1213,7 @@ function LookupAutocomplete<T extends Account | Unit>({
 }) {
   const selected = options.find((option) => option.id === value) ?? null;
   const [inputValue, setInputValue] = useState(selected?.name ?? "");
+  const [highlightedOptionId, setHighlightedOptionId] = useState<number | null>(null);
   const filteredOptions = useMemo(() => {
     const query = inputValue.trim().toLowerCase();
     if (!query) {
@@ -1225,10 +1226,16 @@ function LookupAutocomplete<T extends Account | Unit>({
     setInputValue(selected?.name ?? "");
   }, [selected?.id, selected?.name]);
 
-  const applyTypedCandidate = () => {
+  const applyTypedCandidate = (preferHighlightedOption: boolean) => {
     const normalizedInput = inputValue.trim().toLowerCase();
     const normalizedSelected = selected?.name.trim().toLowerCase() ?? "";
-    const candidate = normalizedInput.length > 0 && normalizedInput !== normalizedSelected ? filteredOptions[0] ?? null : null;
+    if (normalizedInput.length === 0 || normalizedInput === normalizedSelected) {
+      return false;
+    }
+    const highlightedCandidate = preferHighlightedOption
+      ? filteredOptions.find((option) => option.id === highlightedOptionId) ?? null
+      : null;
+    const candidate = highlightedCandidate ?? filteredOptions[0] ?? null;
     if (candidate && candidate.id !== selected?.id) {
       setInputValue(candidate.name);
       onChange(candidate.id);
@@ -1239,10 +1246,10 @@ function LookupAutocomplete<T extends Account | Unit>({
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Tab" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      applyTypedCandidate();
+      applyTypedCandidate(true);
     }
     if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      const appliedTypedCandidate = applyTypedCandidate();
+      const appliedTypedCandidate = applyTypedCandidate(true);
       event.preventDefault();
       event.stopPropagation();
       if (appliedTypedCandidate) {
@@ -1250,6 +1257,14 @@ function LookupAutocomplete<T extends Account | Unit>({
       }
       onKeyDown?.(event);
       return;
+    }
+    if (event.key === " " && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      const appliedTypedCandidate = applyTypedCandidate(true);
+      if (appliedTypedCandidate) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
     }
     onKeyDown?.(event);
   };
@@ -1275,6 +1290,9 @@ function LookupAutocomplete<T extends Account | Unit>({
       onChange={(_, option) => {
         setInputValue(option?.name ?? "");
         onChange(option?.id ?? null);
+      }}
+      onHighlightChange={(_, option) => {
+        setHighlightedOptionId(option?.id ?? null);
       }}
       renderInput={(params) => (
         <TextField
