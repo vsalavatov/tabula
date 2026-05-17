@@ -232,12 +232,11 @@ export async function createKotlinBridge(): Promise<TabulaBridge> {
   };
 
   const updateTransactions = (patch: Partial<TransactionsState>) => {
-    const nextState = {
+    transactionsState = {
       ...transactionsState,
       ...patch,
       canLoadMore: patch.hasOlderTransactions ?? transactionsState.hasOlderTransactions,
     };
-    transactionsState = nextState;
     emitTransactionsState();
   };
   const activeSubscriptions = [

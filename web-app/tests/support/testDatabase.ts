@@ -1,3 +1,5 @@
+﻿// noinspection SqlDialectInspection
+// noinspection SqlNoDataSourceInspection
 import initSqlJs, {type Database} from "sql.js";
 
 export type UploadableDatabaseFile = {

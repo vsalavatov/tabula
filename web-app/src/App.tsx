@@ -769,7 +769,7 @@ function TransactionDraftRow({
             }}
             onChange={(event) => bridge.updateTransactionDateInput(normalizeTypedDateInput(event.target.value))}
             helperText={draft.dateError ? "Use dd-mm-yyyy" : undefined}
-            inputProps={{ "aria-label": "Transaction date" }}
+            slotProps={{ htmlInput: { "aria-label": "Transaction date" } }}
             inputRef={setFieldRef(fieldRefs, "DATE", 0)}
             sx={registerFieldSx}
           />
@@ -784,7 +784,7 @@ function TransactionDraftRow({
             error={draft.descriptionError}
             onKeyDown={handleDraftFieldKeyDown}
             onChange={(event) => bridge.updateTransactionDescription(event.target.value)}
-            inputProps={{ "aria-label": "Transaction description" }}
+            slotProps={{ htmlInput: { "aria-label": "Transaction description" } }}
             inputRef={setFieldRef(fieldRefs, "DESCRIPTION", 0)}
             sx={registerFieldSx}
           />
@@ -824,7 +824,7 @@ function TransactionDraftRow({
                   error={transfer.quantityError}
                   onKeyDown={handleDraftFieldKeyDown}
                   onChange={(event) => bridge.updateTransferQuantity(index, event.target.value)}
-                  inputProps={{ "aria-label": `Transfer ${index + 1} quantity` }}
+                  slotProps={{ htmlInput: { "aria-label": `Transfer ${index + 1} quantity` } }}
                   inputRef={setFieldRef(fieldRefs, "QUANTITY", index)}
                   sx={registerFieldSx}
                 />
@@ -1301,10 +1301,12 @@ function LookupAutocomplete<T extends Account | Unit>({
           error={error}
           inputRef={inputRef}
           autoFocus={autoFocus}
-          inputProps={{
-            ...params.inputProps,
-            "aria-label": ariaLabel,
-            onKeyDown: handleKeyDown,
+          slotProps={{
+            htmlInput: {
+              ...params.inputProps,
+              "aria-label": ariaLabel,
+              onKeyDown: handleKeyDown,
+            },
           }}
         />
       )}
