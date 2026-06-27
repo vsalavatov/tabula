@@ -49,7 +49,6 @@ bin/
 /web-app/playwright-report/
 /web-app/test-results/
 /web-app/vite-dev.log
-/web-app/.env.local
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
