@@ -211,9 +211,25 @@ function Shell({
       <CssBaseline />
       <AppBar position="sticky" color="transparent" elevation={0}>
         <Toolbar sx={{ borderBottom: "1px solid rgba(148,163,184,0.25)", backdropFilter: "blur(16px)" }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, flex: 1 }}>
-            Tabula Web
-          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              Tabula Web
+            </Typography>
+            <Typography
+              aria-label="Alpha release"
+              component="span"
+              sx={{
+                alignSelf: "flex-start",
+                color: "primary.main",
+                fontSize: 11,
+                fontWeight: 700,
+                lineHeight: 1,
+                mt: 0.35,
+              }}
+            >
+              alpha
+            </Typography>
+          </Stack>
           <IconButton aria-label="Privacy notice" color="inherit" onClick={() => setPrivacyOpen(true)}>
             <PrivacyTipOutlinedIcon />
           </IconButton>
