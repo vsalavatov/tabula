@@ -84,7 +84,7 @@ function parseJson<T>(json: string): T {
 }
 
 function generatedAssetUrl(fileName: string) {
-  return `/generated/kotlin/${fileName}`;
+  return `${import.meta.env.BASE_URL}generated/kotlin/${fileName}`;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

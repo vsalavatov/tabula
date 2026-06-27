@@ -1433,7 +1433,7 @@ export function App({ bridge }: { bridge: TabulaBridge }) {
   useEffect(() => bridge.subscribeSettingsState(setSettings), [bridge]);
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Shell
         bridge={bridge}
         transactions={transactions}
