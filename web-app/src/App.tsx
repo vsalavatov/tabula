@@ -42,6 +42,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DownloadIcon from "@mui/icons-material/Download";
 import EditIcon from "@mui/icons-material/Edit";
+import GitHubIcon from "@mui/icons-material/GitHub";
 import PrivacyTipOutlinedIcon from "@mui/icons-material/PrivacyTipOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import {Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts";
@@ -234,6 +235,9 @@ function Shell({
           </Stack>
           <IconButton aria-label="Privacy notice" color="inherit" onClick={() => setPrivacyOpen(true)}>
             <PrivacyTipOutlinedIcon />
+          </IconButton>
+          <IconButton aria-label="GitHub repository" color="inherit" href="https://github.com/vsalavatov/tabula" target="_blank" rel="noreferrer">
+            <GitHubIcon />
           </IconButton>
         </Toolbar>
       </AppBar>
