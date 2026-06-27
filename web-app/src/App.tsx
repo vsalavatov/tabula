@@ -13,10 +13,15 @@ import {
     Container,
     createTheme,
     CssBaseline,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     FormControl,
     FormControlLabel,
     FormLabel,
     IconButton,
+    Link,
     MenuItem,
     Paper,
     Radio,
@@ -36,6 +41,7 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditIcon from "@mui/icons-material/Edit";
+import PrivacyTipOutlinedIcon from "@mui/icons-material/PrivacyTipOutlined";
 import {Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts";
 import {Virtuoso, type VirtuosoHandle} from "react-virtuoso";
 import type {
@@ -185,6 +191,7 @@ function Shell({
   settings: SettingsState;
 }) {
   const location = useLocation();
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   const theme = useMemo(
     () =>
       createTheme({
@@ -204,11 +211,15 @@ function Shell({
       <CssBaseline />
       <AppBar position="sticky" color="transparent" elevation={0}>
         <Toolbar sx={{ borderBottom: "1px solid rgba(148,163,184,0.25)", backdropFilter: "blur(16px)" }}>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, flex: 1 }}>
             Tabula Web
           </Typography>
+          <IconButton aria-label="Privacy notice" color="inherit" onClick={() => setPrivacyOpen(true)}>
+            <PrivacyTipOutlinedIcon />
+          </IconButton>
         </Toolbar>
       </AppBar>
+      <PrivacyDialog open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
       <Container maxWidth="xl" sx={{ py: 4, pb: 12 }}>
         <Routes>
           <Route path="/" element={<TransactionsPage bridge={bridge} state={transactions} />} />
@@ -227,6 +238,46 @@ function Shell({
         </Tabs>
       </Paper>
     </ThemeProvider>
+  );
+}
+
+function PrivacyDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Privacy Notice</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          <Typography variant="body2">
+            Tabula is designed so your app data stays under your control. The app does not run a Tabula application
+            server, and the project maintainer does not receive your accounts, transactions, units, analytics, database,
+            or backup files through normal app use.
+          </Typography>
+          <Typography variant="body2">
+            Your database is stored in your browser. This can include accounts, units, transactions, quantities,
+            descriptions, and derived analytics. Local settings such as theme mode are also stored in your browser.
+          </Typography>
+          <Typography variant="body2">
+            If Google Drive sync is enabled, Tabula uses the Google Drive app data folder to list, upload, restore, and
+            delete Tabula backup files. The app may cache a short-lived Google Drive access token in browser storage
+            during its lifetime.
+          </Typography>
+          <Typography variant="body2">
+            You can use Tabula without Google Drive sync, clear browser site data to remove local data from a device,
+            delete backups from the app, and revoke Google access from your Google Account settings.
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            The full repository privacy notice is available in{" "}
+            <Link href="https://github.com/vsalavatov/tabula/blob/master/PRIVACY.md" target="_blank" rel="noreferrer">
+              PRIVACY.md
+            </Link>
+            .
+          </Typography>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
