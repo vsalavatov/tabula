@@ -132,6 +132,18 @@ async function signIntoMockDrive(page: Page) {
   await expect(page.getByRole("button", { name: /connected: mock google drive/i })).toBeVisible();
 }
 
+test("shows a loading screen while the Kotlin bridge runtime loads", async ({ page }) => {
+  await page.route("**/generated/kotlin/js-joda.js", async (route) => {
+    await page.waitForTimeout(1000);
+    await route.continue();
+  });
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Tabula Web" })).toBeVisible();
+  await expect(page.getByText("Loading your workspace...")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible();
+});
+
 test("imports a database, edits through the inline register, uploads a backup, then restores it", async ({ page }) => {
   const importedDatabase = await createUploadableDatabaseFile();
   await page.goto("/");
@@ -638,4 +650,3 @@ test("persists cached data and theme across reload while analytics remain availa
   await gotoTab(page, "Analytics");
   await expect(page.locator(".recharts-responsive-container")).toBeVisible();
 });
-
