@@ -1,13 +1,23 @@
 # Tabula
 
-Tabula is a web-first Kotlin Multiplatform finance/inventory app.
+Tabula is a client-only web personal finance/inventory app.
+Hosted on [GitHub Pages](https://vsalavatov.github.io/tabula/). 
 
-The active app path is:
+Features:
+* arbitrary customizable currencies
+* multiple accounts (but not multiple users)
+* multi-transfer transactions
+* quick transactions input via keyboard shortcuts and quick-search
+* data stays in your browser, see [PRIVACY.md](PRIVACY.md) for details on data handling 
+* optional backup & sync via Google Drive
 
-- `web-app/` for the React + Vite UI
-- `shared-bridge-web/` for the Kotlin JS bridge
-- `shared-db/` for SQLDelight-backed browser DB/session logic
-- `shared-core/` for shared business logic and presenters
+Transaction input tips (while the help is not implemented inside the app):
+* date can be adjusted by using up/down arrows, or just start typing the date you want, the field mimics the insert mode
+* use Tab to change fields
+* to select an account / currency, start typing its name, press Enter to select it
+* press Enter to add the transaction
+
+(input is not super polished still, but it mostly does what is expected)
 
 ## Prerequisites
 
