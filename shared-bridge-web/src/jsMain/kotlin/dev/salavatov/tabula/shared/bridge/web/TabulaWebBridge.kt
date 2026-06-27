@@ -183,6 +183,17 @@ class TabulaWebBridge(
   fun restoreBackup(fileId: String) = syncPresenter.restoreBackup(fileId)
   fun downloadBackup(fileId: String) = syncPresenter.downloadBackup(fileId)
   fun deleteBackup(fileId: String) = syncPresenter.deleteBackup(fileId)
+  fun exportDatabaseBase64(): Promise<String> = Promise { resolve, reject ->
+    scope.launch {
+      runCatching {
+        session.exportBytes().toBase64()
+      }.onSuccess {
+        resolve(it)
+      }.onFailure {
+        reject(it)
+      }
+    }
+  }
   fun importDatabaseBase64(base64: String): Promise<Unit> = Promise { resolve, reject ->
     scope.launch {
       runCatching {

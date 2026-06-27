@@ -164,6 +164,7 @@ export interface TabulaBridge {
   subscribeSyncState(listener: (state: SyncState) => void): () => void;
   getSettingsState(): SettingsState;
   subscribeSettingsState(listener: (state: SettingsState) => void): () => void;
+  downloadDatabaseFile(): Promise<Blob>;
   importDatabaseFile(file: File): Promise<void>;
   signIn(): void;
   loadBackups(): void;

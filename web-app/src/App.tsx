@@ -40,8 +40,10 @@ import AddIcon from "@mui/icons-material/Add";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DownloadIcon from "@mui/icons-material/Download";
 import EditIcon from "@mui/icons-material/Edit";
 import PrivacyTipOutlinedIcon from "@mui/icons-material/PrivacyTipOutlined";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import {Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts";
 import {Virtuoso, type VirtuosoHandle} from "react-virtuoso";
 import type {
@@ -1154,7 +1156,34 @@ function AnalyticsPage({ bridge, state }: { bridge: TabulaBridge; state: Analyti
 function SyncPage({ bridge, state }: { bridge: TabulaBridge; state: SyncState }) {
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadDatabaseFile = async () => {
+    setIsDownloading(true);
+    setDownloadError(null);
+    setDownloadSuccess(null);
+    try {
+      const blob = await bridge.downloadDatabaseFile();
+      const fileName = `tabula-${todayIsoDate()}.db`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setDownloadSuccess(`Downloaded ${fileName}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setDownloadError(`Failed to download database file: ${message}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const handleDatabaseFileSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1164,6 +1193,8 @@ function SyncPage({ bridge, state }: { bridge: TabulaBridge; state: SyncState })
     setIsImporting(true);
     setImportError(null);
     setImportSuccess(null);
+    setDownloadError(null);
+    setDownloadSuccess(null);
     try {
       await bridge.importDatabaseFile(file);
       setImportSuccess(`Loaded database from ${file.name}`);
@@ -1181,15 +1212,19 @@ function SyncPage({ bridge, state }: { bridge: TabulaBridge; state: SyncState })
         title="Sync"
         action={
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <Button component="label" variant="outlined" disabled={isImporting}>
+            <Button variant="outlined" startIcon={<DownloadIcon />} disabled={isDownloading} onClick={handleDownloadDatabaseFile}>
+              {isDownloading ? "Downloading DB..." : "Download DB File"}
+            </Button>
+            <Button component="label" variant="outlined" startIcon={<UploadFileIcon />} disabled={isImporting}>
               {isImporting ? "Loading DB..." : "Load DB File"}
               <input hidden type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream,application/x-sqlite3" onChange={handleDatabaseFileSelection} />
             </Button>
-            <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => bridge.uploadBackup()}>Upload Backup</Button>
           </Stack>
         }
       />
       {state.error ? <Alert severity="error">{state.error}</Alert> : null}
+      {downloadError ? <Alert severity="error" onClose={() => setDownloadError(null)}>{downloadError}</Alert> : null}
+      {downloadSuccess ? <Alert severity="success" onClose={() => setDownloadSuccess(null)}>{downloadSuccess}</Alert> : null}
       {importError ? <Alert severity="error" onClose={() => setImportError(null)}>{importError}</Alert> : null}
       {importSuccess ? <Alert severity="success" onClose={() => setImportSuccess(null)}>{importSuccess}</Alert> : null}
       <Paper sx={{ p: 2 }}>
@@ -1198,6 +1233,7 @@ function SyncPage({ bridge, state }: { bridge: TabulaBridge; state: SyncState })
             {state.isSignedIn ? `Connected: ${state.accountLabel}` : "Sign in to Google Drive"}
           </Button>
           <Button onClick={() => bridge.loadBackups()}>Refresh Backups</Button>
+          <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => bridge.uploadBackup()}>Upload Backup</Button>
         </Stack>
       </Paper>
       <Stack spacing={2}>

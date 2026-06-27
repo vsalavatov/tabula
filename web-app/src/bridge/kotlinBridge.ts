@@ -97,6 +97,15 @@ function bytesToBase64(bytes: Uint8Array): string {
   return window.btoa(binary);
 }
 
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
 function loadClassicScript(src: string): Promise<void> {
   const existing = document.querySelector<HTMLScriptElement>(`script[data-tabula-src="${src}"]`);
   if (existing) {
@@ -315,6 +324,10 @@ export async function createKotlinBridge(): Promise<TabulaBridge> {
       return () => {
         settingsListeners.delete(listener);
       };
+    },
+    async downloadDatabaseFile() {
+      const base64 = await call<Promise<string>>("exportDatabaseBase64");
+      return new Blob([base64ToBytes(base64)], { type: "application/x-sqlite3" });
     },
     async importDatabaseFile(file) {
       const bytes = new Uint8Array(await file.arrayBuffer());
