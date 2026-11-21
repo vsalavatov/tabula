@@ -1,5 +1,5 @@
 import type {ChangeEvent, KeyboardEvent as ReactKeyboardEvent, MutableRefObject, ReactNode} from "react";
-import {memo, useEffect, useMemo, useRef, useState} from "react";
+import {memo, useEffect, useId, useMemo, useRef, useState} from "react";
 import {BrowserRouter, NavLink, Route, Routes, useLocation} from "react-router-dom";
 import {
     Alert,
@@ -35,6 +35,7 @@ import {
     ThemeProvider,
     Toolbar,
     Typography,
+    useMediaQuery,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
@@ -74,16 +75,16 @@ const pages = [
 ];
 
 const registerColumns = {
-  xs: "1fr",
-  lg: "188px minmax(280px, 1.2fr) minmax(460px, 2.1fr) 140px",
+  xs: "minmax(0, 1fr)",
+  lg: "140px minmax(160px, 1fr) minmax(0, 2.5fr) 136px",
 };
 
-const transferColumns = {
-  xs: "1fr",
-  md: "minmax(170px, 1.25fr) 132px minmax(96px, 0.72fr) minmax(170px, 1.25fr) 40px",
-};
+const compactScreen = "(max-width:599.95px)";
+const shortRegisterScreen = "(max-width:1199.95px) and (max-height:380px)";
+const bottomNavigationClearance = 80;
 
 const registerFieldSx = {
+  minWidth: 0,
   "& .MuiOutlinedInput-root": {
     minHeight: 48,
   },
@@ -195,25 +196,37 @@ function Shell({
 }) {
   const location = useLocation();
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const compact = useMediaQuery(compactScreen);
+  const prefersDark = useMediaQuery("(prefers-color-scheme: dark)");
+  const dark = settings.themeMode === "DARK" || (settings.themeMode === "SYSTEM" && prefersDark);
   const theme = useMemo(
     () =>
       createTheme({
         palette: {
-          mode: settings.themeMode === "DARK" ? "dark" : "light",
+          mode: dark ? "dark" : "light",
           primary: { main: "#1f6feb" },
           secondary: { main: "#0891b2" },
-          background: { default: settings.themeMode === "DARK" ? "#0f172a" : "#f8fafc" },
+          background: { default: dark ? "#0f172a" : "#f8fafc" },
         },
         shape: { borderRadius: 14 },
+        components: {
+          MuiCssBaseline: {
+            styleOverrides: { html: { scrollPaddingBottom: bottomNavigationClearance } },
+          },
+        },
       }),
-    [settings.themeMode],
+    [dark],
   );
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AppBar position="sticky" color="transparent" elevation={0}>
-        <Toolbar sx={{ borderBottom: "1px solid rgba(148,163,184,0.25)", backdropFilter: "blur(16px)" }}>
+        <Toolbar sx={{ minHeight: { xs: "56px !important", sm: "64px !important" }, borderBottom: "1px solid rgba(148,163,184,0.25)", backdropFilter: "blur(16px)" }}>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1 }}>
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
               Tabula Web
@@ -242,7 +255,7 @@ function Shell({
         </Toolbar>
       </AppBar>
       <PrivacyDialog open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
-      <Container maxWidth="xl" sx={{ py: 4, pb: 12 }}>
+      <Container component="main" maxWidth="xl" sx={{ pt: { xs: 2, sm: 4 }, pb: 12 }}>
         <Routes>
           <Route path="/" element={<TransactionsPage bridge={bridge} state={transactions} />} />
           <Route path="/accounts" element={<AccountsPage bridge={bridge} state={accounts} />} />
@@ -252,10 +265,15 @@ function Shell({
           <Route path="/settings" element={<SettingsPage bridge={bridge} state={settings} />} />
         </Routes>
       </Container>
-      <Paper sx={{ position: "fixed", insetInline: 16, bottom: 16, borderRadius: 999, overflow: "hidden" }} elevation={8}>
-        <Tabs value={pages.findIndex((page) => page.path === location.pathname)} variant="fullWidth">
+      <Paper component="nav" aria-label="Main navigation" sx={{ position: "fixed", insetInline: { xs: 8, sm: 16 }, bottom: 16, zIndex: 10, borderRadius: 999, overflow: "hidden" }} elevation={8}>
+        <Tabs
+          value={pages.findIndex((page) => page.path === location.pathname)}
+          variant={compact ? "scrollable" : "fullWidth"}
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+        >
           {pages.map((page) => (
-            <Tab key={page.path} component={NavLink} label={page.label} to={page.path} />
+            <Tab key={page.path} component={NavLink} label={page.label} to={page.path} sx={{ minWidth: 0, px: { xs: 1.5, sm: 1 } }} />
           ))}
         </Tabs>
       </Paper>
@@ -304,7 +322,7 @@ function PrivacyDialog({ open, onClose }: { open: boolean; onClose: () => void }
 }
 
 function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: TransactionsState }) {
-  const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
+  const composerShellRef = useRef<HTMLDivElement | null>(null);
   const stickyComposerSentinelRef = useRef<HTMLDivElement | null>(null);
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
   const revealTimeoutRef = useRef<number | null>(null);
@@ -313,61 +331,7 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
   const [activeRevealSequence, setActiveRevealSequence] = useState<number | null>(null);
   const [loadingOlderWindow, setLoadingOlderWindow] = useState(false);
   const [loadingNewerWindow, setLoadingNewerWindow] = useState(false);
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "t") {
-        event.preventDefault();
-        bridge.addTransferRow();
-      }
-      if (event.key === "Escape" && state.draft.mode === "EDIT_EXISTING") {
-        event.preventDefault();
-        bridge.cancelEditingTransaction();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [bridge, state.draft.mode]);
-
-  useEffect(() => {
-    const focusTarget = state.draft.focusTarget;
-    if (!focusTarget) return;
-    let cancelled = false;
-    let frame = 0;
-    let attempts = 0;
-    const maxAttempts = 8;
-
-    const applyFocus = () => {
-      if (cancelled) return;
-
-      const target = fieldRefs.current[focusKey(focusTarget)];
-      if (!target || !target.isConnected) {
-        if (attempts < maxAttempts) {
-          attempts += 1;
-          frame = window.requestAnimationFrame(applyFocus);
-        }
-        return;
-      }
-
-      target.focus({ preventScroll: true });
-      if (focusTarget.field === "DATE") {
-        setDateCaretToStart(target);
-      } else {
-        target.select?.();
-      }
-
-      if (document.activeElement !== target && attempts < maxAttempts) {
-        attempts += 1;
-        frame = window.requestAnimationFrame(applyFocus);
-      }
-    };
-
-    frame = window.requestAnimationFrame(applyFocus);
-    return () => {
-      cancelled = true;
-      window.cancelAnimationFrame(frame);
-    };
-  }, [state.draft.focusTarget?.sequence]);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
 
   useEffect(() => {
     const reveal = state.revealTransaction;
@@ -406,11 +370,9 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
         }
         return;
       }
-      const stickyComposerHeight =
-        document.querySelector<HTMLElement>('[data-testid="transaction-new-entry-shell"]')?.getBoundingClientRect().height ?? 0;
       const rowRect = row.getBoundingClientRect();
-      const visibleTop = stickyComposerHeight + 16;
-      const visibleBottom = window.innerHeight - 24;
+      const visibleTop = (composerShellRef.current?.getBoundingClientRect().bottom ?? 0) + 8;
+      const visibleBottom = window.innerHeight - bottomNavigationClearance;
       const needsScroll = rowRect.top < visibleTop || rowRect.bottom > visibleBottom;
       if (needsScroll) {
         row.scrollIntoView({ behavior: "auto", block: "center" });
@@ -452,8 +414,8 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
       return;
     }
     const updatePinnedState = () => {
-      const stickyTopOffset = window.innerWidth < 600 ? 56 : 64;
-      setNewDraftPinned(sentinel.getBoundingClientRect().top <= stickyTopOffset + 1);
+      const stickyTopOffset = window.matchMedia(compactScreen).matches ? 56 : 64;
+      setNewDraftPinned(!window.matchMedia(shortRegisterScreen).matches && sentinel.getBoundingClientRect().top <= stickyTopOffset + 1);
     };
     updatePinnedState();
     window.addEventListener("scroll", updatePinnedState, { passive: true });
@@ -466,31 +428,22 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
 
   return (
     <Stack spacing={3}>
-      <SectionHeader
-        title="Transactions"
-        action={
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            {state.draft.mode === "EDIT_EXISTING" ? (
-              <Button onClick={() => bridge.beginNewTransactionEntry()}>New Entry</Button>
-            ) : null}
-          </Stack>
-        }
-      />
-      {state.error ? <Alert severity="error">{state.error}</Alert> : null}
+      <SectionHeader title="Transactions" />
       <Paper
         sx={{
           overflow: "visible",
           position: "relative",
           border: "1px solid rgba(148,163,184,0.28)",
-          backgroundImage: "linear-gradient(180deg, rgba(255,255,255,0.65), rgba(248,250,252,0.95))",
         }}
       >
         <Box ref={stickyComposerSentinelRef} sx={{ position: "absolute", top: 0, insetInline: 0, height: 1, pointerEvents: "none" }} />
         <Box
+          ref={composerShellRef}
           data-testid="transaction-new-entry-shell"
           data-sticky-active={newDraftPinned ? "true" : "false"}
           sx={{
             position: "sticky",
+            [`@media ${shortRegisterScreen}`]: { position: "static" },
             top: { xs: 56, sm: 64 },
             zIndex: 5,
             backgroundColor: "background.paper",
@@ -501,26 +454,22 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
           <RegisterColumnLabels pinned={newDraftPinned} />
           {state.draft.mode === "NEW" ? (
             <Box sx={{ borderBottom: "1px solid rgba(148,163,184,0.18)", backgroundColor: "background.paper" }}>
-              <TransactionDraftRow bridge={bridge} state={state} fieldRefs={fieldRefs} sticky pinned={newDraftPinned} />
+              <TransactionDraftRow bridge={bridge} state={state} sticky />
             </Box>
           ) : null}
         </Box>
-        {state.draft.mode === "EDIT_EXISTING" ? (
-          <Box sx={{ px: 2.5, py: 1, borderBottom: "1px solid rgba(148,163,184,0.18)", backgroundColor: "rgba(15,23,42,0.03)" }}>
-            <Typography variant="caption" sx={{ letterSpacing: "0.08em", textTransform: "uppercase", color: "text.secondary" }}>
-              Editing an existing transaction inline. Press Esc to cancel or Enter in any field to save.
-            </Typography>
-          </Box>
-        ) : null}
         {state.isLoading ? (
           <Box sx={{ px: 2.5, py: 4 }}>
             <Typography color="text.secondary">Loading transactions...</Typography>
           </Box>
+        ) : state.totalTransactionCount === 0 ? (
+          <Typography color="text.secondary" sx={{ p: 2 }}>No transactions yet.</Typography>
         ) : (
           <Box sx={{ position: "relative" }}>
             <Virtuoso
               ref={virtuosoRef}
               data={state.visibleTransactions}
+              computeItemKey={(_, transaction) => transaction.id}
               firstItemIndex={state.viewportOffset}
               useWindowScroll
               overscan={400}
@@ -548,7 +497,7 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
                   previousDateIso={resolvePreviousDateIso(state, transaction)}
                   bridge={bridge}
                   state={state}
-                  fieldRefs={fieldRefs}
+                  onDelete={setTransactionToDelete}
                   highlighted={highlightedTransactionId === transaction.id}
                 />
               )}
@@ -573,6 +522,18 @@ function TransactionsPage({ bridge, state }: { bridge: TabulaBridge; state: Tran
           </Box>
         )}
       </Paper>
+      <ConfirmationDialog
+        open={transactionToDelete !== null}
+        action="Delete transaction"
+        destructive
+        onCancel={() => setTransactionToDelete(null)}
+        onConfirm={() => {
+          if (transactionToDelete) bridge.deleteTransaction(transactionToDelete.id);
+          setTransactionToDelete(null);
+        }}
+      >
+        “{transactionToDelete?.description}” will be removed and the account balances will be updated.
+      </ConfirmationDialog>
     </Stack>
   );
 }
@@ -581,13 +542,13 @@ function RegisterColumnLabels({ pinned = false }: { pinned?: boolean }) {
   return (
     <Box
       sx={{
-        display: "grid",
+        display: { xs: "none", lg: "grid" },
         gridTemplateColumns: registerColumns,
         gap: 2,
         px: 2.5,
         py: 1.5,
         borderBottom: "1px solid rgba(148,163,184,0.18)",
-        backgroundColor: pinned ? "rgba(255,255,255,0.98)" : "rgba(148,163,184,0.08)",
+        backgroundColor: pinned ? "background.paper" : "action.hover",
         transition: "background-color 140ms ease",
       }}
     >
@@ -615,7 +576,7 @@ function TransactionRegisterItem({
   previousDateIso,
   bridge,
   state,
-  fieldRefs,
+  onDelete,
   highlighted,
 }: {
   absoluteIndex: number;
@@ -623,7 +584,7 @@ function TransactionRegisterItem({
   previousDateIso: string | null;
   bridge: TabulaBridge;
   state: TransactionsState;
-  fieldRefs: MutableRefObject<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>;
+  onDelete: (transaction: Transaction) => void;
   highlighted: boolean;
 }) {
   const transactionDateIso = transaction.timestamp.slice(0, 10);
@@ -635,9 +596,9 @@ function TransactionRegisterItem({
     <Box data-transaction-row-index={absoluteIndex} sx={{ borderBottom: "1px solid rgba(148,163,184,0.16)" }}>
       {showDateHeader ? <TransactionDateHeader label={headerLabel} dateIso={transactionDateIso} /> : null}
       {state.activeEditingTransactionId === transaction.id ? (
-        <TransactionDraftRow bridge={bridge} state={state} fieldRefs={fieldRefs} />
+        <TransactionDraftRow bridge={bridge} state={state} />
       ) : (
-        <TransactionSummaryRow bridge={bridge} item={transaction} highlighted={highlighted} />
+        <TransactionSummaryRow bridge={bridge} item={transaction} highlighted={highlighted} onDelete={onDelete} editing={state.draft.mode === "EDIT_EXISTING"} />
       )}
     </Box>
   );
@@ -667,22 +628,60 @@ function TransactionViewportIndicator({ position, count }: { position: "top" | "
 function TransactionDraftRow({
   bridge,
   state,
-  fieldRefs,
   sticky = false,
-  pinned = false,
 }: {
   bridge: TabulaBridge;
   state: TransactionsState;
-  fieldRefs: MutableRefObject<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>;
   sticky?: boolean;
-  pinned?: boolean;
 }) {
   const draft = state.draft;
   const editingExisting = draft.mode === "EDIT_EXISTING";
+  const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
+  const transfersRef = useRef<HTMLDivElement | null>(null);
   const dateFieldPointerDownRef = useRef(false);
   const dateFieldPendingCaretRef = useRef<number | null>(null);
   const dateOverwriteValueRef = useRef<string | null>(null);
   const dateOverwriteCaretRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const focusTarget = draft.focusTarget;
+    if (!focusTarget) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const target = fieldRefs.current[focusKey(focusTarget)];
+      if (!target) return;
+
+      target.focus({ preventScroll: true });
+      if (focusTarget.field === "DATE") {
+        setDateCaretToStart(target);
+        dateOverwriteValueRef.current = target.value;
+        dateOverwriteCaretRef.current = 0;
+      } else {
+        target.select();
+      }
+
+      const panel = transfersRef.current;
+      if (panel?.contains(target)) {
+        const row = target.closest("[data-transfer-row]");
+        const rowRect = row?.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        if (rowRect && rowRect.top < panelRect.top) {
+          panel.scrollTop += rowRect.top - panelRect.top - 4;
+        } else if (rowRect && rowRect.bottom > panelRect.bottom) {
+          panel.scrollTop += rowRect.bottom - panelRect.bottom + 4;
+        }
+      }
+
+      if (editingExisting || window.matchMedia(shortRegisterScreen).matches) {
+        const rect = target.getBoundingClientRect();
+        const top = window.matchMedia("(min-width:1200px)").matches ? 112 : 72;
+        const bottom = window.innerHeight - bottomNavigationClearance;
+        if (rect.top < top) window.scrollBy(0, rect.top - top);
+        else if (rect.bottom > bottom) window.scrollBy(0, rect.bottom - bottom);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [draft.focusTarget?.sequence, editingExisting]);
 
   useEffect(() => {
     const pendingCaret = dateFieldPendingCaretRef.current;
@@ -710,9 +709,9 @@ function TransactionDraftRow({
     bridge.commitTransactionDraft();
   };
   const handleDraftFieldKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (event.key === "Enter" && !event.nativeEvent.isComposing && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      handleCommit();
+      if (!event.repeat) handleCommit();
     }
   };
   const handleDateFieldFocus = (target: HTMLInputElement | HTMLTextAreaElement) => {
@@ -803,26 +802,42 @@ function TransactionDraftRow({
 
   return (
     <Box
+      component="form"
+      aria-label={editingExisting ? "Edit transaction" : "New transaction"}
       data-testid={editingExisting ? "transaction-edit-row" : sticky ? "transaction-new-row" : "transaction-draft-row"}
+      onSubmit={(event) => {
+        event.preventDefault();
+        handleCommit();
+      }}
+      onKeyDownCapture={(event) => {
+        if (!event.nativeEvent.isComposing && event.key === "Enter" && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!event.repeat) bridge.addTransferRow();
+        }
+      }}
+      onKeyDown={(event) => {
+        if (!event.defaultPrevented && event.key === "Escape" && editingExisting) {
+          event.preventDefault();
+          bridge.cancelEditingTransaction();
+        }
+      }}
       sx={{
-        px: 2.5,
-        py: sticky ? (pinned ? 1.25 : 2) : 1.75,
-        backgroundColor: sticky ? "rgba(255,255,255,0.98)" : "rgba(255,255,255,0.88)",
-        transition: "padding 140ms ease, background-color 140ms ease",
+        p: { xs: 1.25, sm: 2 },
+        backgroundColor: "background.paper",
       }}
     >
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: registerColumns,
-          gap: 2,
+          gridTemplateColumns: { xs: "minmax(0, 9rem) minmax(0, 1fr)", lg: registerColumns.lg },
+          gap: { xs: 1, sm: 1.5, lg: 2 },
           alignItems: "start",
         }}
       >
         <Stack spacing={1.25}>
           <TextField
             fullWidth
-            autoFocus={draft.focusTarget?.field === "DATE"}
             placeholder="dd-mm-yyyy"
             value={draft.dateInput}
             error={draft.dateError}
@@ -851,7 +866,6 @@ function TransactionDraftRow({
         <Stack spacing={1.25}>
           <TextField
             fullWidth
-            autoFocus={draft.focusTarget?.field === "DESCRIPTION"}
             placeholder="Description"
             value={draft.description}
             error={draft.descriptionError}
@@ -863,92 +877,104 @@ function TransactionDraftRow({
           />
         </Stack>
 
-        <Stack spacing={1.25}>
+        <Box sx={{ gridColumn: { xs: "1 / -1", lg: "auto" }, minWidth: 0 }}>
           <Stack
+            ref={transfersRef}
             spacing={1}
-            sx={
-              sticky
-                ? {
-                    maxHeight: { xs: 320, md: 236 },
-                    overtabuLA: "auto",
-                    overscrollBehavior: "contain",
-                    pr: 0.5,
-                  }
-                : undefined
-            }
+            sx={{ maxHeight: "min(16rem, max(7.5rem, 32dvh))", overflowY: "auto", p: 0.5, mt: -0.5 }}
           >
             {draft.transfers.map((transfer, index) => (
-              <Box key={`draft-transfer-${index}`} sx={{ display: "grid", gridTemplateColumns: transferColumns, gap: 1, alignItems: "start" }}>
+              <Box
+                key={`draft-transfer-${index}`}
+                data-transfer-row
+                role="group"
+                aria-label={`Transfer ${index + 1}`}
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "minmax(0, 1fr) minmax(0, 1.15fr) auto",
+                    sm: "minmax(0, 1.3fr) minmax(0, .7fr) minmax(0, 1fr) minmax(0, 1.3fr) auto",
+                  },
+                  gridTemplateAreas: { xs: '"from quantity remove" "unit to remove"', sm: '"from quantity unit to remove"' },
+                  gap: 1,
+                  alignItems: "start",
+                  "&:not(:last-child)": { borderBottom: { xs: 1, sm: 0 }, borderColor: "divider", pb: { xs: 1, sm: 0 } },
+                }}
+              >
                 <LookupAutocomplete
+                  gridArea="from"
                   ariaLabel={`Transfer ${index + 1} from account`}
-                  placeholder="From account"
+                  label="From account"
                   value={transfer.fromAccountId}
                   options={state.accounts}
                   error={transfer.fromAccountError}
-                  autoFocus={draft.focusTarget?.field === "FROM_ACCOUNT" && draft.focusTarget?.transferRowIndex === index}
                   inputRef={setFieldRef(fieldRefs, "FROM_ACCOUNT", index)}
                   onChange={(value) => bridge.updateTransferFromAccount(index, value)}
                   onKeyDown={handleDraftFieldKeyDown}
                 />
                 <TextField
-                  autoFocus={draft.focusTarget?.field === "QUANTITY" && draft.focusTarget?.transferRowIndex === index}
-                  placeholder="Quantity"
+                  label="Quantity"
+                  size="small"
                   value={transfer.quantityInput}
                   error={transfer.quantityError}
                   onKeyDown={handleDraftFieldKeyDown}
                   onChange={(event) => bridge.updateTransferQuantity(index, event.target.value)}
                   slotProps={{ htmlInput: { "aria-label": `Transfer ${index + 1} quantity` } }}
                   inputRef={setFieldRef(fieldRefs, "QUANTITY", index)}
-                  sx={registerFieldSx}
+                  sx={{ ...registerFieldSx, gridArea: "quantity" }}
                 />
                 <LookupAutocomplete
+                  gridArea="unit"
                   ariaLabel={`Transfer ${index + 1} unit`}
-                  placeholder="Unit"
+                  label="Unit"
                   value={transfer.unitId}
                   options={state.units}
                   error={transfer.unitError}
-                  autoFocus={draft.focusTarget?.field === "UNIT" && draft.focusTarget?.transferRowIndex === index}
                   inputRef={setFieldRef(fieldRefs, "UNIT", index)}
                   onChange={(value) => bridge.updateTransferUnit(index, value)}
                   onKeyDown={handleDraftFieldKeyDown}
                 />
                 <LookupAutocomplete
+                  gridArea="to"
                   ariaLabel={`Transfer ${index + 1} to account`}
-                  placeholder="To account"
+                  label="To account"
                   value={transfer.toAccountId}
                   options={state.accounts}
                   error={transfer.toAccountError}
-                  autoFocus={draft.focusTarget?.field === "TO_ACCOUNT" && draft.focusTarget?.transferRowIndex === index}
                   inputRef={setFieldRef(fieldRefs, "TO_ACCOUNT", index)}
                   onChange={(value) => bridge.updateTransferToAccount(index, value)}
                   onKeyDown={handleDraftFieldKeyDown}
                 />
-                <IconButton
-                  aria-label={`Remove transfer ${index + 1}`}
-                  size="small"
-                  disabled={draft.transfers.length === 1}
-                  onClick={() => bridge.removeTransferRow(index)}
-                  sx={{ mt: 0.75 }}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
+                {draft.transfers.length > 1 && (
+                  <IconButton
+                    aria-label={`Remove transfer ${index + 1}`}
+                    onClick={() => bridge.removeTransferRow(index)}
+                    sx={{ gridArea: "remove", alignSelf: "center" }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                )}
               </Box>
             ))}
           </Stack>
-          <Button startIcon={<AddIcon />} onClick={() => bridge.addTransferRow()} sx={{ alignSelf: "flex-start" }}>
+        </Box>
+
+        <Stack
+          direction={{ xs: "row", lg: "column" }}
+          useFlexGap
+          flexWrap="wrap"
+          spacing={0.5}
+          sx={{ gridColumn: { xs: "1 / -1", lg: "auto" }, justifyContent: "space-between" }}
+        >
+          <Button startIcon={<AddIcon />} onClick={() => bridge.addTransferRow()} aria-keyshortcuts="Alt+Enter" title="Alt+Enter">
             Add transfer
           </Button>
-        </Stack>
-
-        <Stack spacing={1} alignItems="stretch" justifyContent="center">
-          <Button variant="contained" onClick={handleCommit}>
-            {draft.mode === "EDIT_EXISTING" ? "Save changes" : "Save entry"}
+          {editingExisting ? <Button onClick={() => bridge.cancelEditingTransaction()} aria-keyshortcuts="Escape">Cancel</Button> : null}
+          <Button type="submit" variant="contained">
+            {editingExisting ? "Save changes" : "Save entry"}
           </Button>
-          {draft.mode === "EDIT_EXISTING" ? <Button onClick={() => bridge.cancelEditingTransaction()}>Cancel</Button> : null}
-          <Typography variant="caption" color="text.secondary">
-            Enter saves from any field. Ctrl+T adds a blank transfer row.
-          </Typography>
         </Stack>
+        {state.error && <Alert severity="error" sx={{ gridColumn: "1 / -1", py: 0 }}>{state.error}</Alert>}
       </Box>
     </Box>
   );
@@ -958,41 +984,30 @@ const TransactionSummaryRow = memo(function TransactionSummaryRow({
   bridge,
   item,
   highlighted = false,
+  onDelete,
+  editing,
 }: {
   bridge: TabulaBridge;
   item: Transaction;
   highlighted?: boolean;
+  onDelete: (transaction: Transaction) => void;
+  editing: boolean;
 }) {
   return (
     <Box
       data-transaction-id={item.id}
       data-highlighted={highlighted ? "true" : "false"}
-      role="button"
-      tabIndex={0}
-      aria-label={`Edit ${item.description}`}
-      onClick={() => bridge.beginEditingTransaction(item.id)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          bridge.beginEditingTransaction(item.id);
-        }
-      }}
       sx={{
+        position: "relative",
         display: "grid",
         gridTemplateColumns: registerColumns,
         gap: 2,
         px: 2.5,
         py: 1.75,
-        cursor: "pointer",
         backgroundColor: highlighted ? "rgba(31,111,235,0.12)" : "transparent",
         boxShadow: highlighted ? "inset 0 0 0 1px rgba(31,111,235,0.28)" : "none",
         transition: "background-color 220ms ease, box-shadow 220ms ease",
         "&:hover": { backgroundColor: highlighted ? "rgba(31,111,235,0.14)" : "rgba(31,111,235,0.04)" },
-        "&:focus-visible": {
-          outline: "2px solid",
-          outlineColor: "primary.main",
-          outlineOffset: "-2px",
-        },
       }}
     >
       <Stack spacing={0.35}>
@@ -1002,7 +1017,26 @@ const TransactionSummaryRow = memo(function TransactionSummaryRow({
         </Typography>
       </Stack>
       <Stack spacing={0.35}>
-        <Typography sx={{ fontWeight: 600 }}>{item.description}</Typography>
+        <Typography
+          component="button"
+          type="button"
+          aria-label={`Edit ${item.description}`}
+          disabled={editing}
+          onClick={() => bridge.beginEditingTransaction(item.id)}
+          sx={{
+            fontWeight: 600,
+            p: 0,
+            border: 0,
+            background: "none",
+            color: "inherit",
+            textAlign: "start",
+            overflowWrap: "anywhere",
+            "&:enabled::after": { content: '""', position: "absolute", inset: 0, cursor: "pointer" },
+            "&:focus-visible::after": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: "-2px" },
+          }}
+        >
+          {item.description}
+        </Typography>
         <Typography variant="body2" color="text.secondary">
           {item.transfers.length} {item.transfers.length === 1 ? "transfer" : "transfers"}
         </Typography>
@@ -1010,7 +1044,7 @@ const TransactionSummaryRow = memo(function TransactionSummaryRow({
       <Stack spacing={0.75}>
         {item.transfers.map((transfer) => (
           <Box key={transfer.id} sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
               {transfer.accountFrom.name} {"->"} {transfer.accountTo.name}
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -1023,10 +1057,8 @@ const TransactionSummaryRow = memo(function TransactionSummaryRow({
         <IconButton
           aria-label={`Delete ${item.description}`}
           size="small"
-          onClick={(event) => {
-            event.stopPropagation();
-            bridge.deleteTransaction(item.id);
-          }}
+          onClick={() => onDelete(item)}
+          sx={{ zIndex: 1 }}
         >
           <DeleteOutlineIcon fontSize="small" />
         </IconButton>
@@ -1041,8 +1073,10 @@ function AccountsPage({ bridge, state }: { bridge: TabulaBridge; state: Accounts
       <SectionHeader title="Accounts" action={<Button onClick={() => bridge.checkConsistency()}>Check Consistency</Button>} />
       {state.error ? <Alert severity="error">{state.error}</Alert> : null}
       {state.consistencyResult ? (
-        <Alert severity="warning" onClose={() => bridge.clearConsistencyResult()}>
-          {state.consistencyResult.inconsistencies.map((item) => `${item.assetDesc}: ${item.diff}`).join(", ")}
+        <Alert severity={state.consistencyResult.inconsistencies.length ? "warning" : "success"} onClose={() => bridge.clearConsistencyResult()}>
+          {state.consistencyResult.inconsistencies.length
+            ? state.consistencyResult.inconsistencies.map((item) => `${item.assetDesc}: ${item.diff}`).join(", ")
+            : "Account balances are consistent."}
         </Alert>
       ) : null}
       <FormControlLabel control={<Switch checked={state.showArchived} onChange={(event) => bridge.toggleShowArchived(event.target.checked)} />} label="Show archived accounts" />
@@ -1061,7 +1095,7 @@ function AccountsPage({ bridge, state }: { bridge: TabulaBridge; state: Accounts
                 <Box sx={{ flex: 1 }}>
                   {item.editMode ? (
                     <Stack spacing={1}>
-                      <TextField value={item.nameInput} onChange={(event) => bridge.updateAccountName(item.account.id, event.target.value)} />
+                      <TextField label="Account name" value={item.nameInput} onChange={(event) => bridge.updateAccountName(item.account.id, event.target.value)} />
                       <FormControlLabel control={<Checkbox checked={item.inPossessionInput} onChange={(event) => bridge.updateAccountInPossession(item.account.id, event.target.checked)} />} label="In possession" />
                       <FormControlLabel control={<Checkbox checked={item.archivedInput} onChange={(event) => bridge.updateAccountArchived(item.account.id, event.target.checked)} />} label="Archived" />
                       {item.showArchivedError ? <Alert severity="warning">Account cannot be archived while it has assets.</Alert> : null}
@@ -1125,45 +1159,67 @@ function UnitsPage({ bridge, state }: { bridge: TabulaBridge; state: UnitsState 
 }
 
 function AnalyticsPage({ bridge, state }: { bridge: TabulaBridge; state: AnalyticsState }) {
+  const rangeLabels: Record<AnalyticsTimeRange, string> = {
+    LAST_WEEK: "Last week",
+    LAST_MONTH: "Last month",
+    LAST_THREE_MONTHS: "Last three months",
+    LAST_SIX_MONTHS: "Last six months",
+    LAST_YEAR: "Last year",
+    ALL_TIME: "All time",
+  };
   return (
     <Stack spacing={3}>
       <SectionHeader title="Analytics" />
+      {state.error && <Alert severity="error">{state.error}</Alert>}
       <Paper sx={{ p: 2 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-          <Select fullWidth value={state.selectedAccountId ?? ""} onChange={(event) => bridge.selectAnalyticsAccount(Number(event.target.value))}>
+          <Select fullWidth displayEmpty inputProps={{ "aria-label": "Account" }} disabled={!state.accounts.length} value={state.selectedAccountId ?? ""} onChange={(event) => bridge.selectAnalyticsAccount(Number(event.target.value))}>
+            <MenuItem value="" disabled>{state.accounts.length ? "Select account" : "No accounts"}</MenuItem>
             {state.accounts.map((account) => <MenuItem key={account.id} value={account.id}>{account.name}</MenuItem>)}
           </Select>
-          <Select fullWidth value={state.selectedUnitId ?? ""} onChange={(event) => bridge.selectAnalyticsUnit(Number(event.target.value))}>
+          <Select fullWidth displayEmpty inputProps={{ "aria-label": "Unit" }} disabled={!state.units.length} value={state.selectedUnitId ?? ""} onChange={(event) => bridge.selectAnalyticsUnit(Number(event.target.value))}>
+            <MenuItem value="" disabled>{state.units.length ? "Select unit" : "No units"}</MenuItem>
             {state.units.map((unit) => <MenuItem key={unit.id} value={unit.id}>{unit.name}</MenuItem>)}
           </Select>
-          <Select fullWidth value={state.timeRange} onChange={(event) => bridge.selectAnalyticsTimeRange(event.target.value as AnalyticsTimeRange)}>
-            {(["LAST_WEEK", "LAST_MONTH", "LAST_THREE_MONTHS", "LAST_SIX_MONTHS", "LAST_YEAR", "ALL_TIME"] as AnalyticsTimeRange[]).map((range) => (
-              <MenuItem key={range} value={range}>{range.replaceAll("_", " ")}</MenuItem>
+          <Select fullWidth inputProps={{ "aria-label": "Time range" }} value={state.timeRange} onChange={(event) => bridge.selectAnalyticsTimeRange(event.target.value as AnalyticsTimeRange)}>
+            {Object.entries(rangeLabels).map(([range, label]) => (
+              <MenuItem key={range} value={range}>{label}</MenuItem>
             ))}
           </Select>
         </Stack>
       </Paper>
-      <Paper sx={{ p: 2, height: 360 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={state.balanceData.map((point) => ({ ...point, label: new Date(point.date).toLocaleDateString() }))}>
-            <XAxis dataKey="label" />
-            <YAxis />
-            <Tooltip />
-            <Line type="monotone" dataKey="balance" stroke="#1f6feb" strokeWidth={3} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </Paper>
+      {state.isLoading || !state.balanceData.length ? (
+        <Paper sx={{ p: 2 }}>
+          <Typography color="text.secondary" role="status">
+            {state.isLoading ? "Loading balance history…" : "No balance history for this selection."}
+          </Typography>
+        </Paper>
+      ) : (
+        <Paper sx={{ p: 2, height: 360 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={state.balanceData.map((point) => ({ ...point, label: new Date(point.date).toLocaleDateString() }))}>
+              <XAxis dataKey="label" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="balance" stroke="#1f6feb" strokeWidth={3} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Paper>
+      )}
     </Stack>
   );
 }
 
 function SyncPage({ bridge, state }: { bridge: TabulaBridge; state: SyncState }) {
+  const [backupAction, setBackupAction] = useState<{ kind: "restore" | "delete"; id: string; name: string } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const driveBusy = state.isLoading || Object.values(state.restoreStatus).includes("Restoring...");
+  const fileBusy = isImporting || isDownloading;
 
   const handleDownloadDatabaseFile = async () => {
     setIsDownloading(true);
@@ -1216,12 +1272,12 @@ function SyncPage({ bridge, state }: { bridge: TabulaBridge; state: SyncState })
         title="Sync"
         action={
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <Button variant="outlined" startIcon={<DownloadIcon />} disabled={isDownloading} onClick={handleDownloadDatabaseFile}>
+            <Button variant="outlined" startIcon={<DownloadIcon />} disabled={fileBusy || driveBusy} onClick={handleDownloadDatabaseFile}>
               {isDownloading ? "Downloading DB..." : "Download DB File"}
             </Button>
-            <Button component="label" variant="outlined" startIcon={<UploadFileIcon />} disabled={isImporting}>
+            <Button component="label" variant="outlined" startIcon={<UploadFileIcon />} disabled={fileBusy || driveBusy}>
               {isImporting ? "Loading DB..." : "Load DB File"}
-              <input hidden type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream,application/x-sqlite3" onChange={handleDatabaseFileSelection} />
+              <input hidden type="file" disabled={fileBusy || driveBusy} accept=".db,.sqlite,.sqlite3,application/octet-stream,application/x-sqlite3" onChange={handleDatabaseFileSelection} />
             </Button>
           </Stack>
         }
@@ -1233,30 +1289,75 @@ function SyncPage({ bridge, state }: { bridge: TabulaBridge; state: SyncState })
       {importSuccess ? <Alert severity="success" onClose={() => setImportSuccess(null)}>{importSuccess}</Alert> : null}
       <Paper sx={{ p: 2 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-          <Button variant={state.isSignedIn ? "outlined" : "contained"} onClick={() => bridge.signIn()}>
+          <Button variant={state.isSignedIn ? "outlined" : "contained"} disabled={fileBusy || driveBusy} onClick={() => bridge.signIn()}>
             {state.isSignedIn ? `Connected: ${state.accountLabel}` : "Sign in to Google Drive"}
           </Button>
-          <Button onClick={() => bridge.loadBackups()}>Refresh Backups</Button>
-          <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => bridge.uploadBackup()}>Upload Backup</Button>
+          <Button disabled={!state.isSignedIn || driveBusy || fileBusy} onClick={() => bridge.loadBackups()}>Refresh Backups</Button>
+          <Button variant="contained" startIcon={<CloudUploadIcon />} disabled={!state.isSignedIn || driveBusy || fileBusy} onClick={() => bridge.uploadBackup()}>Upload Backup</Button>
         </Stack>
       </Paper>
       <Stack spacing={2}>
         {state.backupFiles.map((file) => (
           <Card key={file.id}>
-            <CardContent sx={{ display: "flex", justifyContent: "space-between", gap: 2, alignItems: "center" }}>
-              <Box>
-                <Typography fontWeight={600}>{file.name}</Typography>
+            <CardContent sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, justifyContent: "space-between", gap: 1, alignItems: { sm: "center" } }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography fontWeight={600} sx={{ overflowWrap: "anywhere" }}>{file.name}</Typography>
                 <Typography variant="body2" color="text.secondary">{state.restoreStatus[file.id] ?? "Available"}</Typography>
               </Box>
               <Stack direction="row" spacing={1}>
-                <Button onClick={() => bridge.restoreBackup(file.id)}>Restore</Button>
-                <Button onClick={() => bridge.deleteBackup(file.id)} color="inherit">Delete</Button>
+                <Button disabled={driveBusy || fileBusy} onClick={() => setBackupAction({ kind: "restore", ...file })}>Restore</Button>
+                <Button disabled={driveBusy || fileBusy} onClick={() => setBackupAction({ kind: "delete", ...file })} color="inherit">Delete</Button>
               </Stack>
             </CardContent>
           </Card>
         ))}
       </Stack>
+      <ConfirmationDialog
+        open={backupAction !== null}
+        action={backupAction?.kind === "restore" ? "Restore backup" : "Delete backup"}
+        destructive={backupAction?.kind === "delete"}
+        onCancel={() => setBackupAction(null)}
+        onConfirm={() => {
+          if (backupAction?.kind === "restore") bridge.restoreBackup(backupAction.id);
+          if (backupAction?.kind === "delete") bridge.deleteBackup(backupAction.id);
+          setBackupAction(null);
+        }}
+      >
+        {backupAction?.kind === "restore"
+          ? `Restoring “${backupAction.name}” will replace the current local database.`
+          : `“${backupAction?.name}” will be removed from Google Drive.`}
+      </ConfirmationDialog>
     </Stack>
+  );
+}
+
+function ConfirmationDialog({ open, action, destructive, onCancel, onConfirm, children }: {
+  open: boolean;
+  action: string;
+  destructive?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  children: ReactNode;
+}) {
+  const titleId = useId();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      aria-labelledby={titleId}
+      slotProps={{ transition: { onEntered: () => cancelRef.current?.focus() } }}
+    >
+      <DialogTitle id={titleId}>{action}?</DialogTitle>
+      <DialogContent>
+        <Typography sx={{ overflowWrap: "anywhere" }}>{children}</Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button ref={cancelRef} onClick={onCancel}>Cancel</Button>
+        <Button color={destructive ? "error" : "primary"} onClick={onConfirm}>{action}</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -1298,99 +1399,91 @@ function RegisterLabel({ children }: { children: ReactNode }) {
 }
 
 function LookupAutocomplete<T extends Account | Unit>({
+  gridArea,
   ariaLabel,
-  placeholder,
+  label,
   value,
   options,
   error = false,
-  autoFocus = false,
   inputRef,
   onChange,
   onKeyDown,
 }: {
+  gridArea: "from" | "unit" | "to";
   ariaLabel: string;
-  placeholder: string;
+  label: string;
   value: number | null;
   options: T[];
   error?: boolean;
-  autoFocus?: boolean;
   inputRef: (element: HTMLInputElement | HTMLTextAreaElement | null) => void;
   onChange: (value: number | null) => void;
   onKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
 }) {
   const selected = options.find((option) => option.id === value) ?? null;
   const [inputValue, setInputValue] = useState(selected?.name ?? "");
-  const [highlightedOptionId, setHighlightedOptionId] = useState<number | null>(null);
+  const keyboardOptionId = useRef<number | null>(null);
+  const inputMatchesSelection = inputValue === (selected?.name ?? "");
   const filteredOptions = useMemo(() => {
     const query = inputValue.trim().toLowerCase();
-    if (!query) {
+    if (!query || inputMatchesSelection) {
       return options;
     }
     return options.filter((option) => option.name.toLowerCase().includes(query));
-  }, [inputValue, options]);
+  }, [inputValue, inputMatchesSelection, options]);
 
   useEffect(() => {
     setInputValue(selected?.name ?? "");
   }, [selected?.id, selected?.name]);
 
-  const applyTypedCandidate = (preferHighlightedOption: boolean) => {
-    const normalizedInput = inputValue.trim().toLowerCase();
-    const normalizedSelected = selected?.name.trim().toLowerCase() ?? "";
-    if (normalizedInput.length === 0 || normalizedInput === normalizedSelected) {
-      return false;
-    }
-    const highlightedCandidate = preferHighlightedOption
-      ? filteredOptions.find((option) => option.id === highlightedOptionId) ?? null
-      : null;
-    const candidate = highlightedCandidate ?? filteredOptions[0] ?? null;
-    if (candidate && candidate.id !== selected?.id) {
-      setInputValue(candidate.name);
-      onChange(candidate.id);
-      return true;
-    }
-    return false;
+  const applyCandidate = () => {
+    const highlighted = filteredOptions.find((option) => option.id === keyboardOptionId.current);
+    const candidate = highlighted ?? (inputValue.trim() && !inputMatchesSelection ? filteredOptions[0] : undefined);
+    if (!candidate) return false;
+
+    keyboardOptionId.current = null;
+    setInputValue(candidate.name);
+    if (candidate.id !== selected?.id) onChange(candidate.id);
+    return true;
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Tab" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      applyTypedCandidate(true);
+    if (event.nativeEvent.isComposing || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === "Tab") {
+      applyCandidate();
     }
-    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      const appliedTypedCandidate = applyTypedCandidate(true);
+    if (event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
-      if (appliedTypedCandidate) {
-        return;
-      }
-      onKeyDown?.(event);
+      if (!event.repeat && !applyCandidate() && inputMatchesSelection) onKeyDown?.(event);
       return;
     }
-    if (event.key === " " && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      const appliedTypedCandidate = applyTypedCandidate(true);
-      if (appliedTypedCandidate) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
+    if (event.key === " " && keyboardOptionId.current !== null && applyCandidate()) {
+      event.preventDefault();
+      event.stopPropagation();
     }
-    onKeyDown?.(event);
   };
 
   return (
-    <Autocomplete
+    <Autocomplete<T>
       size="small"
       autoHighlight
       openOnFocus
       blurOnSelect
-      disableClearable
+      forcePopupIcon={false}
       options={filteredOptions}
       value={selected}
       inputValue={inputValue}
       getOptionLabel={(option) => option.name}
       isOptionEqualToValue={(option, optionValue) => option.id === optionValue.id}
-      sx={registerFieldSx}
+      filterOptions={(available) => available}
+      sx={{ ...registerFieldSx, gridArea }}
+      onBlur={() => {
+        keyboardOptionId.current = null;
+        setInputValue(selected?.name ?? "");
+      }}
       onInputChange={(_, nextValue, reason) => {
         if (reason === "input" || reason === "clear") {
+          keyboardOptionId.current = null;
           setInputValue(nextValue);
         }
       }}
@@ -1398,16 +1491,15 @@ function LookupAutocomplete<T extends Account | Unit>({
         setInputValue(option?.name ?? "");
         onChange(option?.id ?? null);
       }}
-      onHighlightChange={(_, option) => {
-        setHighlightedOptionId(option?.id ?? null);
+      onHighlightChange={(_, option, reason) => {
+        keyboardOptionId.current = reason === "keyboard" ? option?.id ?? null : null;
       }}
       renderInput={(params) => (
         <TextField
           {...params}
-          placeholder={placeholder}
+          label={label}
           error={error}
           inputRef={inputRef}
-          autoFocus={autoFocus}
           slotProps={{
             htmlInput: {
               ...params.inputProps,
@@ -1427,7 +1519,7 @@ function setFieldRef(
   transferRowIndex: number,
 ) {
   return (element: HTMLInputElement | HTMLTextAreaElement | null) => {
-    fieldRefs.current[focusKey({ field, transferRowIndex, sequence: 0 })] = element;
+    fieldRefs.current[focusKey({ field, transferRowIndex })] = element;
   };
 }
 

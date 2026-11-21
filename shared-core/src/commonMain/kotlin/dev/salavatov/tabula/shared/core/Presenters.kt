@@ -184,10 +184,14 @@ class TransactionPresenter(
   fun addTransferRow() {
     _state.update { state ->
       val nextIndex = state.draft.transfers.size
+      val seed = state.draft.transfers.lastOrNull()?.let(::normalizeTransferSeed) ?: TransferDraftState()
       state.copy(
         draft = state.draft.copy(
-          transfers = state.draft.transfers + TransferDraftState(),
-          focusTarget = nextFocus(TransactionField.FROM_ACCOUNT, nextIndex),
+          transfers = state.draft.transfers + seed,
+          focusTarget = nextFocus(
+            if (seed.fromAccountId == null) TransactionField.FROM_ACCOUNT else TransactionField.QUANTITY,
+            nextIndex,
+          ),
         ),
         error = null,
       )
@@ -196,9 +200,14 @@ class TransactionPresenter(
 
   fun removeTransferRow(index: Int) {
     _state.update { state ->
-      val updatedTransfers = state.draft.transfers.filterIndexed { i, _ -> i != index }.ifEmpty { listOf(TransferDraftState()) }
+      val transfers = state.draft.transfers
+      if (transfers.size <= 1 || index !in transfers.indices) return@update state
+      val updatedTransfers = transfers.filterIndexed { i, _ -> i != index }
       state.copy(
-        draft = state.draft.copy(transfers = updatedTransfers),
+        draft = state.draft.copy(
+          transfers = updatedTransfers,
+          focusTarget = nextFocus(TransactionField.QUANTITY, index.coerceAtMost(updatedTransfers.lastIndex)),
+        ),
         error = null,
       )
     }

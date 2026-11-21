@@ -6,6 +6,7 @@ This is the main view of the Tabula application. It displays a list of transacti
 
 On top of the view is located the new transaction editor. 
 It is 'sticky', meaning it remains visible while scrolling through the transaction list.
+On very short viewports the editor scrolls with the page, leaving room to reach the fields and the transaction list.
 
 It has the following editing fields in order:
 * date
@@ -15,6 +16,10 @@ It has the following editing fields in order:
   * quantity
   * unit
   * to account
+
+Add transfer appends a row with the previous transfer's from account, unit, and to account. The amount starts empty. Focus moves to the amount, or to the from account when it is empty. Use the Add transfer button or press `Alt+Enter` while focused inside either transaction editor.
+
+Long transfer lists scroll inside the editor, keeping Add transfer and the save controls outside the scroll area. Adding a row or focusing an invalid field brings that transfer into view.
 
 ## Ergonomic addition
 
@@ -54,6 +59,7 @@ Date field typing behavior:
 * on forward `Tab`, if typed text points to a different candidate, the highlighted option is applied before focus moves on (fallback: first filtered option)
 * on `Enter`, if typed text points to a different candidate, that candidate is applied and the key press is consumed (no transaction save)
 * when dropdown option highlight is moved with arrow keys, `Enter` and `Space` apply the highlighted option (not forcibly the first filtered one)
+* otherwise `Space` types a space in the search, and `Enter` with unmatched text keeps focus in the dropdown
 * in searchable dropdown fields, `Enter` and `Space` that apply a candidate are consumed and do not move focus
 
 Transaction save via keyboard:
@@ -62,6 +68,7 @@ Transaction save via keyboard:
 
 After successful save, editor is reset for the next entry and focus returns to the date field.
 
+Use Cancel or `Escape` inside the inline editor to discard edits. Delete on a saved transaction opens a confirmation dialog.
 
 ## Infinite scrolling support
 

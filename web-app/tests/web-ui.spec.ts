@@ -109,11 +109,11 @@ async function createTransactionInline(
     const rowNumber = index + 1;
     if (index > 0) {
       if (details.addExtraTransfersWithShortcut) {
-        await page.keyboard.press("Control+t");
+        await page.getByLabel(`Transfer ${index} quantity`).press("Alt+Enter");
       } else {
         await page.getByRole("button", { name: "Add transfer" }).click();
       }
-      await expect(page.getByRole("combobox", { name: `Transfer ${rowNumber} from account`, exact: true })).toBeFocused();
+      await expect(page.getByLabel(`Transfer ${rowNumber} quantity`)).toBeFocused();
     }
     await fillTransfer(page, rowNumber, transfer);
   }
@@ -170,6 +170,7 @@ test("imports a database, edits through the inline register, uploads a backup, t
   await expect(page.getByRole("button", { name: "Restore" })).toHaveCount(2);
 
   await page.getByRole("button", { name: "Restore" }).nth(1).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Restore backup" }).click();
   await expect(page.getByText("Restored").first()).toBeVisible();
 
   await gotoTab(page, "Accounts");
@@ -181,10 +182,11 @@ test("imports a database, edits through the inline register, uploads a backup, t
 
   await gotoTab(page, "Sync");
   await page.getByRole("button", { name: "Delete" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete backup" }).click();
   await expect(page.getByRole("button", { name: "Restore" })).toHaveCount(1);
 });
 
-test("creates a multi-transfer transaction with keyboard-first entry and Ctrl+T", async ({ page }) => {
+test("creates a multi-transfer transaction with keyboard-first entry and Alt+Enter", async ({ page }) => {
   await page.goto("/");
 
   await createUnit(page, "Euro", "EUR", "2");
@@ -207,6 +209,36 @@ test("creates a multi-transfer transaction with keyboard-first entry and Ctrl+T"
   await expect(page.getByText("750 EUR")).toBeVisible();
   await expect(page.getByText("Bank -> Broker")).toBeVisible();
   await expect(page.getByText("250 EUR")).toBeVisible();
+});
+
+test("keeps actions accessible with many transfers on a narrow screen", async ({ page }) => {
+  const seededDatabase = await createKeyboardDefaultsDatabaseFile();
+  await page.setViewportSize({ width: 390, height: 720 });
+  await page.goto("/");
+  await loadDatabaseFile(page, seededDatabase);
+  await gotoTab(page, "Transactions");
+
+  const editor = page.getByRole("form", { name: "New transaction" });
+  const add = editor.getByRole("button", { name: "Add transfer" });
+  const save = editor.getByRole("button", { name: "Save entry" });
+  for (let number = 2; number <= 9; number += 1) {
+    await add.click();
+    await expect(editor.getByLabel(`Transfer ${number} quantity`)).toBeFocused();
+  }
+
+  const last = editor.getByRole("group", { name: "Transfer 9", exact: true });
+  await expect(last.getByRole("combobox", { name: /from account/i })).toHaveValue("income");
+  await expect(last.getByRole("combobox", { name: /unit/i })).toHaveValue("Euro");
+  await expect(last.getByRole("combobox", { name: /to account/i })).toHaveValue("external");
+  await expect(last.getByRole("textbox", { name: /quantity/i })).toHaveValue("");
+  await expect(last).toBeInViewport({ ratio: 0.95 });
+  await expect(editor.getByRole("group", { name: "Transfer 1", exact: true })).not.toBeInViewport();
+  await expect(save).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+
+  await last.getByRole("button", { name: "Remove transfer 9" }).click();
+  await expect(last).toHaveCount(0);
+  await expect(editor.getByLabel("Transfer 8 quantity")).toBeFocused();
 });
 
 test("new transaction entry uses current-date and session defaults with keyboard-first tab flow", async ({ page }) => {
@@ -567,7 +599,15 @@ test("transaction row delete removes the transaction and rolls back account bala
 
   await gotoTab(page, "Transactions");
   await expect(page.getByText("Delete me")).toBeVisible();
-  await page.getByRole("button", { name: "Delete Delete me" }).click();
+  const deleteButton = page.getByRole("button", { name: "Delete Delete me" });
+  await deleteButton.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Delete transaction?" });
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText("Delete me")).toBeVisible();
+  await deleteButton.press("Space");
+  await dialog.getByRole("button", { name: "Delete transaction" }).click();
   await expect(page.getByText("Delete me")).toHaveCount(0);
 
   await gotoTab(page, "Accounts");
