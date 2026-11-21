@@ -243,9 +243,13 @@ enum class AnalyticsTimeRange(val days: Int?) {
 }
 
 @Serializable
-data class BalancePoint(
-  val date: Instant,
-  val balance: Double,
+data class BalanceDay(
+  val date: LocalDate,
+  val open: Double,
+  val high: Double,
+  val low: Double,
+  val close: Double,
+  val hasActivity: Boolean,
 )
 
 @Serializable
@@ -255,7 +259,7 @@ data class AnalyticsUiState(
   val selectedAccountId: Long? = null,
   val selectedUnitId: Long? = null,
   val timeRange: AnalyticsTimeRange = AnalyticsTimeRange.LAST_MONTH,
-  val balanceData: List<BalancePoint> = emptyList(),
+  val balanceData: List<BalanceDay> = emptyList(),
   val isLoading: Boolean = false,
   val error: String? = null,
 )

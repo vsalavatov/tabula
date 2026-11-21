@@ -65,6 +65,31 @@ async function createDatabaseFile(name: string, seedDatabase: SeedDatabase): Pro
   }
 }
 
+export async function createDailyBalanceDatabaseFile(): Promise<UploadableDatabaseFile> {
+  return createDatabaseFile("daily-balances.db", (db) => {
+    db.exec(`
+      INSERT INTO Units (id, name, symbol, mantissaLength) VALUES (1, 'Euro', 'EUR', 2);
+      INSERT INTO Accounts (id, name, owning, archived) VALUES (1, 'Wallet', 1, 0), (2, 'External', 0, 0);
+      INSERT INTO Assets (account, unit, quantity) VALUES (1, 1, 120), (2, 1, -120);
+      INSERT INTO Transactions (id, timestamp, description) VALUES
+        (1, ${Date.parse("2025-02-15T10:00:00Z")}, 'Opening funds'),
+        (2, ${Date.parse("2025-03-27T23:30:00Z")}, 'Deposit just after local midnight'),
+        (3, ${Date.parse("2025-03-28T18:00:00Z")}, 'Net purchase'),
+        (4, ${Date.parse("2025-03-30T12:00:00Z")}, 'Another expense'),
+        (5, ${Date.parse("2025-04-09T12:00:00Z")}, 'Top-up'),
+        (6, ${Date.parse("2025-04-15T12:00:00Z")}, 'Future transfer');
+      INSERT INTO Transfers (transaction_, accountFrom, accountTo, unit, delta) VALUES
+        (1, 2, 1, 1, 100),
+        (2, 2, 1, 1, 40),
+        (3, 1, 2, 1, 200),
+        (3, 2, 1, 1, 185),
+        (4, 1, 2, 1, 20),
+        (5, 2, 1, 1, 5),
+        (6, 2, 1, 1, 10);
+    `);
+  });
+}
+
 export async function createUploadableDatabaseFile(): Promise<UploadableDatabaseFile> {
   return createDatabaseFile("manual-import.db", (db) => {
     db.exec(`

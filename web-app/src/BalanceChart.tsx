@@ -1,0 +1,145 @@
+import {Box, Paper, Typography, useMediaQuery, useTheme} from "@mui/material";
+import {CartesianGrid, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis} from "recharts";
+import type {BalanceDay, Unit} from "./bridge/types";
+
+const millisecondsPerDay = 86_400_000;
+
+function calendarDay(date: string) {
+  return Date.parse(date) / millisecondsPerDay;
+}
+
+const fullDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
+
+export type BalanceChartMode = "line" | "candles";
+
+interface CandleShapeProps {
+  cx: number;
+  payload: BalanceDay & { day: number };
+  xAxis: { scale: (day: number) => number };
+  yAxis: { scale: (balance: number) => number };
+}
+
+export function BalanceChart({ days, unit, mode }: { days: BalanceDay[]; unit?: Unit; mode: BalanceChartMode }) {
+  const theme = useTheme();
+  const touchInput = useMediaQuery("(hover: none)");
+  // An ISO local date is plotted as a calendar day, so daylight saving changes don't change its width.
+  const points = days.map((point) => ({ ...point, day: calendarDay(point.date) }));
+  const first = points[0];
+  const last = points[points.length - 1];
+  const candles = points.filter((point) => point.hasActivity);
+  const isCandles = mode === "candles";
+  const fractionDigits = Math.min(20, Math.max(0, unit?.mantissaLength ?? 2));
+  const formatBalance = new Intl.NumberFormat(undefined, { maximumFractionDigits: fractionDigits });
+  const formatChange = new Intl.NumberFormat(undefined, { maximumFractionDigits: fractionDigits, signDisplay: "exceptZero" });
+  const formatAmount = (amount: number) => `${formatBalance.format(amount)}${unit ? ` ${unit.symbol}` : ""}`;
+
+  if (isCandles && !candles.length) {
+    return <Paper sx={{ p: 2 }}><Typography color="text.secondary">No transfers for this selection and time range.</Typography></Paper>;
+  }
+
+  const tickCount = Math.min(5, last.day - first.day + 1);
+  const ticks = Array.from({ length: tickCount }, (_, index) =>
+    first.day + Math.round(index * (last.day - first.day) / Math.max(1, tickCount - 1)),
+  );
+  const tickDate = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: first.date.slice(0, 4) === last.date.slice(0, 4) ? undefined : "2-digit",
+    timeZone: "UTC",
+  });
+  const [lowest, highest] = points.reduce(([min, max], point) => [
+    Math.min(min, isCandles ? point.low : point.close),
+    Math.max(max, isCandles ? point.high : point.close),
+  ], [first.open, first.open]);
+  const padding = (highest - lowest) * 0.08 || Math.max(Math.abs(highest) * 0.05, 10 ** -fractionDigits);
+  const xAxis = (
+    <XAxis
+      dataKey="day"
+      type="number"
+      scale="linear"
+      domain={[first.day - 0.5, last.day + 0.5]}
+      allowDataOverflow
+      ticks={ticks}
+      tickFormatter={(day: number) => tickDate.format(day * millisecondsPerDay)}
+    />
+  );
+  const yAxis = (
+    <YAxis
+      dataKey="close"
+      type="number"
+      domain={[lowest - padding, highest + padding]}
+      allowDataOverflow
+      tickFormatter={(amount: number) => formatBalance.format(amount)}
+    />
+  );
+  const tooltip = (
+    <Tooltip trigger={touchInput ? "click" : "hover"} content={({ active, payload }) => {
+      const day: BalanceDay | undefined = payload?.[0]?.payload;
+      if (!active || !day) return null;
+      return (
+        <Paper elevation={4} sx={{ p: 1.5 }}>
+          <Typography variant="subtitle2">{fullDate.format(calendarDay(day.date) * millisecondsPerDay)}</Typography>
+          {isCandles ? (
+            <Box component="dl" sx={{ display: "grid", gridTemplateColumns: "auto auto", m: 0, columnGap: 2, fontSize: 14, "& dd": { m: 0, textAlign: "end" } }}>
+              <dt>Open</dt><dd>{formatAmount(day.open)}</dd>
+              <dt>Close</dt><dd>{formatAmount(day.close)}</dd>
+              <dt>High</dt><dd>{formatAmount(day.high)}</dd>
+              <dt>Low</dt><dd>{formatAmount(day.low)}</dd>
+              <dt>Change</dt><dd>{formatChange.format(day.close - day.open)}{unit ? ` ${unit.symbol}` : ""}</dd>
+            </Box>
+          ) : (
+            <Typography variant="body2">Balance {formatAmount(day.close)}</Typography>
+          )}
+        </Paper>
+      );
+    }} />
+  );
+  const drawCandle = (props: unknown) => {
+    const { cx, payload, xAxis, yAxis } = props as CandleShapeProps;
+    const dayWidth = Math.abs(xAxis.scale(payload.day + 1) - cx);
+    const width = Math.max(1, Math.min(18, dayWidth * 0.68));
+    const hitWidth = Math.min(24, dayWidth);
+    const open = yAxis.scale(payload.open);
+    const close = yAxis.scale(payload.close);
+    const high = yAxis.scale(payload.high);
+    const low = yAxis.scale(payload.low);
+    const color = payload.close > payload.open ? theme.palette.success.main
+      : payload.close < payload.open ? theme.palette.error.main : theme.palette.text.secondary;
+    return (
+      <g data-candle-day={payload.date} aria-label={`${payload.date}, open ${formatAmount(payload.open)}, close ${formatAmount(payload.close)}`}>
+        <rect x={cx - hitWidth / 2} y={high - 5} width={hitWidth} height={Math.max(10, low - high + 10)} fill="transparent" />
+        <line x1={cx} x2={cx} y1={high} y2={low} stroke={color} />
+        <rect x={cx - width / 2} y={Math.min(open, close)} width={width} height={Math.max(2, Math.abs(open - close))} fill={color} />
+      </g>
+    );
+  };
+  const lineData = [
+    { ...first, day: first.day - 0.5, close: first.open },
+    ...points,
+    { ...last, day: last.day + 0.5 },
+  ];
+
+  return (
+    <Paper sx={{ p: { xs: 1, sm: 2 }, height: 360 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        {isCandles ? (
+          <ScatterChart margin={{ top: 10, right: 16, bottom: 4 }}>
+            <CartesianGrid stroke={theme.palette.divider} vertical={false} />
+            {xAxis}
+            {yAxis}
+            {tooltip}
+            <Scatter data={candles} shape={drawCandle} activeShape={drawCandle} isAnimationActive={false} />
+          </ScatterChart>
+        ) : (
+          <LineChart data={lineData} margin={{ top: 10, right: 16, bottom: 4 }} accessibilityLayer>
+            <CartesianGrid stroke={theme.palette.divider} vertical={false} />
+            {xAxis}
+            {yAxis}
+            {tooltip}
+            <Line dataKey="close" type="stepAfter" stroke={theme.palette.primary.main} strokeWidth={2} dot={false} isAnimationActive={false} />
+          </LineChart>
+        )}
+      </ResponsiveContainer>
+    </Paper>
+  );
+}

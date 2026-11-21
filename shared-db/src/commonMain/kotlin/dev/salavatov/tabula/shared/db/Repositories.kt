@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.*
 import kotlin.math.absoluteValue
-import kotlin.time.Duration.Companion.days
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UnitRepositoryImpl(
@@ -291,56 +290,57 @@ class AnalyticsRepositoryImpl(
     }
     .flowOn(Dispatchers.Default)
 
-  override suspend fun loadBalanceData(accountId: Long, unitId: Long, timeRange: AnalyticsTimeRange): List<BalancePoint> = withContext(Dispatchers.Default) {
-    val db = databaseFlow.value ?: error("Database is not available")
-    val currentTime = Clock.System.now()
-    val transactions = db.transactionsQueries.getTransactions(TransactionRecord::deserialize).executeAsList().sortedBy { it.timestamp }
-      .filter { transaction ->
-        val days = timeRange.days ?: return@filter true
-        transaction.timestamp >= currentTime - days.days
+  override fun observeBalanceData(accountId: Long, unitId: Long, timeRange: AnalyticsTimeRange): Flow<List<BalanceDay>> =
+    databaseFlow.filterNotNull().flatMapLatest { db ->
+      db.transactionsQueries.getAccountBalanceChanges(accountId, unitId, Long.MIN_VALUE)
+        .asFlow()
+        .map { db.transactionWithResult { readBalanceDays(db, accountId, unitId, timeRange) } }
+    }.flowOn(Dispatchers.Default)
+
+  private fun readBalanceDays(
+    db: TabulaSharedDatabase,
+    accountId: Long,
+    unitId: Long,
+    timeRange: AnalyticsTimeRange,
+  ): List<BalanceDay> {
+    val zone = TimeZone.currentSystemDefault()
+    val today = Clock.System.now().toLocalDateTime(zone).date
+    val tomorrowStart = today.plus(DatePeriod(days = 1)).atStartOfDayIn(zone)
+    val startDate = timeRange.days?.let { today.minus(DatePeriod(days = it - 1)) }
+    val startTimestamp = startDate?.atStartOfDayIn(zone)?.toEpochMilliseconds() ?: Long.MIN_VALUE
+    val changes = db.transactionsQueries.getAccountBalanceChanges(accountId, unitId, startTimestamp).executeAsList()
+    val asset = db.assetsQueries.forStore(accountId, AssetRecord::deserialize).executeAsList().find { it.unit == unitId }
+    if (asset == null && changes.isEmpty()) return emptyList()
+
+    var balance = asset?.quantity ?: 0.0
+    val days = mutableListOf<BalanceDay>()
+    for ((timestamp, change) in changes) {
+      val previousBalance = balance - (change ?: 0.0)
+      val instant = Instant.fromEpochMilliseconds(timestamp)
+      if (instant < tomorrowStart) {
+        val date = instant.toLocalDateTime(zone).date
+        val day = days.lastOrNull()
+        val low = minOf(balance, previousBalance)
+        val high = maxOf(balance, previousBalance)
+        if (day?.date == date) {
+          days[days.lastIndex] = day.copy(open = previousBalance, high = maxOf(day.high, high), low = minOf(day.low, low))
+        } else {
+          days.add(BalanceDay(date, previousBalance, high, low, balance, hasActivity = true))
+        }
       }
-    if (transactions.isEmpty()) return@withContext emptyList()
-    val startTime = if (timeRange.days != null) {
-      currentTime - timeRange.days!!.days
-    } else {
-      transactions.first().timestamp
+      balance = previousBalance
     }
-    val currentAsset = db.assetsQueries.forStore(accountId, AssetRecord::deserialize).executeAsList().find { it.unit == unitId }
-    var runningBalance = currentAsset?.quantity ?: 0.0
-    val balanceMap = linkedMapOf<Instant, Double>()
-    balanceMap[currentTime] = runningBalance
-    val relevantTransfers = transactions.flatMap { transaction ->
-      db.transfersQueries.forTransaction(transaction.id, TransferRecord::deserialize).executeAsList()
-        .filter { transfer -> (transfer.accountFrom == accountId || transfer.accountTo == accountId) && transfer.unit == unitId }
-        .map { transaction.timestamp to it }
-    }.sortedByDescending { it.first }
-    relevantTransfers.forEach { (timestamp, transfer) ->
-      when {
-        transfer.accountFrom == accountId -> runningBalance += transfer.delta
-        transfer.accountTo == accountId -> runningBalance -= transfer.delta
-      }
-      balanceMap[timestamp] = runningBalance
+
+    val endBalance = days.firstOrNull()?.close ?: balance
+    if (days.firstOrNull()?.date != today) {
+      days.add(0, flatBalanceDay(today, endBalance))
     }
-    fillDataPoints(balanceMap.entries.sortedBy { it.key }.map { BalancePoint(it.key, it.value) }, startTime, currentTime)
+    if (startDate != null && days.last().date != startDate) {
+      days.add(flatBalanceDay(startDate, balance))
+    }
+    return days.asReversed()
   }
 
-  private fun fillDataPoints(balancePoints: List<BalancePoint>, startTime: Instant, endTime: Instant): List<BalancePoint> {
-    if (balancePoints.isEmpty()) return emptyList()
-    val pointsByDay = linkedMapOf<String, BalancePoint>()
-    balancePoints.forEach { point ->
-      val dayKey = point.date.toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
-      pointsByDay[dayKey] = point
-    }
-    val startDay = startTime.toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
-    val endDay = endTime.toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
-    val result = mutableListOf<BalancePoint>()
-    if (!pointsByDay.containsKey(startDay)) {
-      result.add(BalancePoint(startTime, balancePoints.first().balance))
-    }
-    result.addAll(pointsByDay.values)
-    if (!pointsByDay.containsKey(endDay)) {
-      result.add(BalancePoint(endTime, balancePoints.last().balance))
-    }
-    return result
-  }
+  private fun flatBalanceDay(date: LocalDate, balance: Double) =
+    BalanceDay(date, balance, balance, balance, balance, hasActivity = false)
 }

@@ -752,6 +752,7 @@ class AnalyticsPresenter(
 ) {
   private val _state = MutableStateFlow(AnalyticsUiState(isLoading = true))
   val state: StateFlow<AnalyticsUiState> = _state.asStateFlow()
+  private var balanceJob: Job? = null
 
   init {
     scope.launch {
@@ -759,7 +760,7 @@ class AnalyticsPresenter(
         _state.update {
           it.copy(
             accounts = accounts,
-            selectedAccountId = it.selectedAccountId ?: accounts.firstOrNull()?.id,
+            selectedAccountId = accounts.firstOrNull { account -> account.id == it.selectedAccountId }?.id ?: accounts.firstOrNull()?.id,
           )
         }
         loadBalanceData()
@@ -770,7 +771,7 @@ class AnalyticsPresenter(
         _state.update {
           it.copy(
             units = units,
-            selectedUnitId = it.selectedUnitId ?: units.firstOrNull()?.id,
+            selectedUnitId = units.firstOrNull { unit -> unit.id == it.selectedUnitId }?.id ?: units.firstOrNull()?.id,
           )
         }
         loadBalanceData()
@@ -793,20 +794,22 @@ class AnalyticsPresenter(
     loadBalanceData()
   }
 
-  fun loadBalanceData() {
+  private fun loadBalanceData() {
+    balanceJob?.cancel()
     val state = _state.value
-    val accountId = state.selectedAccountId ?: return
-    val unitId = state.selectedUnitId ?: return
-    scope.launch {
-      _state.update { it.copy(isLoading = true, error = null) }
-      runCatching {
-        analyticsRepository.loadBalanceData(accountId, unitId, _state.value.timeRange)
-      }.onSuccess { points ->
-        _state.update { it.copy(balanceData = points, isLoading = false, error = null) }
-      }.onFailure { error ->
-        _state.update { it.copy(isLoading = false, error = "Failed to load balance data: ${error.message}") }
-      }
+    val accountId = state.selectedAccountId
+    val unitId = state.selectedUnitId
+    if (accountId == null || unitId == null) {
+      _state.update { it.copy(balanceData = emptyList(), isLoading = false, error = null) }
+      return
     }
+    _state.update { it.copy(isLoading = true, error = null) }
+    balanceJob = analyticsRepository.observeBalanceData(accountId, unitId, state.timeRange)
+      .onEach { days -> _state.update { it.copy(balanceData = days, isLoading = false, error = null) } }
+      .catch { error ->
+        _state.update { it.copy(balanceData = emptyList(), isLoading = false, error = "Failed to load balance data: ${error.message}") }
+      }
+      .launchIn(scope)
   }
 }
 

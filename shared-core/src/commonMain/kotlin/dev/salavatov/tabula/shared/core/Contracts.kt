@@ -32,7 +32,7 @@ interface AccountRepository {
 interface AnalyticsRepository {
   fun observeAccounts(): Flow<List<Account>>
   fun observeUnits(): Flow<List<MeasureUnit>>
-  suspend fun loadBalanceData(accountId: Long, unitId: Long, timeRange: AnalyticsTimeRange): List<BalancePoint>
+  fun observeBalanceData(accountId: Long, unitId: Long, timeRange: AnalyticsTimeRange): Flow<List<BalanceDay>>
 }
 
 interface BackupManager {

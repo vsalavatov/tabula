@@ -1,6 +1,19 @@
 getTransactions:
 SELECT * FROM Transactions ORDER BY timestamp DESC;
 
+getAccountBalanceChanges:
+SELECT t.timestamp, SUM(
+  CASE WHEN tr.accountTo = :accountId THEN tr.delta ELSE 0.0 END
+  - CASE WHEN tr.accountFrom = :accountId THEN tr.delta ELSE 0.0 END
+) AS change
+FROM Transactions t
+JOIN Transfers tr ON t.id = tr.transaction_
+WHERE tr.unit = :unitId
+  AND (tr.accountFrom = :accountId OR tr.accountTo = :accountId)
+  AND t.timestamp >= :fromTimestamp
+GROUP BY t.id, t.timestamp
+ORDER BY t.timestamp DESC, t.id DESC;
+
 getTransactionsWithDetailsWindow:
 WITH visible_transactions AS (
   SELECT id, timestamp, description

@@ -33,6 +33,8 @@ import {
     Tabs,
     TextField,
     ThemeProvider,
+    ToggleButton,
+    ToggleButtonGroup,
     Toolbar,
     Typography,
     useMediaQuery,
@@ -46,8 +48,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import PrivacyTipOutlinedIcon from "@mui/icons-material/PrivacyTipOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import {Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from "recharts";
 import {Virtuoso, type VirtuosoHandle} from "react-virtuoso";
+import {BalanceChart, type BalanceChartMode} from "./BalanceChart";
 import type {
     Account,
     AccountsState,
@@ -1159,6 +1161,8 @@ function UnitsPage({ bridge, state }: { bridge: TabulaBridge; state: UnitsState 
 }
 
 function AnalyticsPage({ bridge, state }: { bridge: TabulaBridge; state: AnalyticsState }) {
+  const [mode, setMode] = useState<BalanceChartMode>("line");
+  const unit = state.units.find((item) => item.id === state.selectedUnitId);
   const rangeLabels: Record<AnalyticsTimeRange, string> = {
     LAST_WEEK: "Last week",
     LAST_MONTH: "Last month",
@@ -1169,7 +1173,23 @@ function AnalyticsPage({ bridge, state }: { bridge: TabulaBridge; state: Analyti
   };
   return (
     <Stack spacing={3}>
-      <SectionHeader title="Analytics" />
+      <SectionHeader
+        title="Analytics"
+        action={
+          <ToggleButtonGroup
+            aria-label="Chart type"
+            value={mode}
+            exclusive
+            size="small"
+            onChange={(_, value: BalanceChartMode | null) => {
+              if (value) setMode(value);
+            }}
+          >
+            <ToggleButton value="line">Balance line</ToggleButton>
+            <ToggleButton value="candles">Daily candles</ToggleButton>
+          </ToggleButtonGroup>
+        }
+      />
       {state.error && <Alert severity="error">{state.error}</Alert>}
       <Paper sx={{ p: 2 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
@@ -1195,16 +1215,7 @@ function AnalyticsPage({ bridge, state }: { bridge: TabulaBridge; state: Analyti
           </Typography>
         </Paper>
       ) : (
-        <Paper sx={{ p: 2, height: 360 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={state.balanceData.map((point) => ({ ...point, label: new Date(point.date).toLocaleDateString() }))}>
-              <XAxis dataKey="label" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="balance" stroke="#1f6feb" strokeWidth={3} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Paper>
+        <BalanceChart days={state.balanceData} unit={unit} mode={mode} />
       )}
     </Stack>
   );

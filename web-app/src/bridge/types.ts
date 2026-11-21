@@ -127,13 +127,22 @@ export interface AccountsState {
   error: string | null;
 }
 
+export interface BalanceDay {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  hasActivity: boolean;
+}
+
 export interface AnalyticsState {
   accounts: Account[];
   units: Unit[];
   selectedAccountId: number | null;
   selectedUnitId: number | null;
   timeRange: AnalyticsTimeRange;
-  balanceData: Array<{ date: string; balance: number }>;
+  balanceData: BalanceDay[];
   isLoading: boolean;
   error: string | null;
 }

@@ -1,5 +1,6 @@
 ﻿import {expect, type Page, test} from "@playwright/test";
 import {
+  createDailyBalanceDatabaseFile,
   createKeyboardDefaultsDatabaseFile,
   createLongRegisterDatabaseFile,
   createMassiveHistoryDatabaseFile,
@@ -689,4 +690,54 @@ test("persists cached data and theme across reload while analytics remain availa
 
   await gotoTab(page, "Analytics");
   await expect(page.locator(".recharts-responsive-container")).toBeVisible();
+});
+
+test.describe("daily balance charts", () => {
+  test.use({ timezoneId: "Europe/Berlin", locale: "en-US" });
+
+  test("uses elapsed days on the axis and shows the real daily balance range", async ({ page }) => {
+    await freezeDate(page, "2025-04-12T12:00:00.000Z");
+    await page.goto("/");
+    await loadDatabaseFile(page, await createDailyBalanceDatabaseFile());
+    await gotoTab(page, "Analytics");
+
+    await expect(page.getByRole("button", { name: "Balance line" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".recharts-line-curve")).toBeVisible();
+    await page.getByRole("button", { name: "Daily candles" }).click();
+
+    const candles = page.locator("[data-candle-day]");
+    await expect(candles).toHaveCount(3);
+    const first = page.locator('[data-candle-day="2025-03-28"]');
+    const second = page.locator('[data-candle-day="2025-03-30"]');
+    const third = page.locator('[data-candle-day="2025-04-09"]');
+    const centers = await candles.evaluateAll((elements) => elements.map((node) => {
+      const { x, width } = node.getBoundingClientRect();
+      return x + width / 2;
+    }));
+    expect((centers[2] - centers[1]) / (centers[1] - centers[0])).toBeCloseTo(5, 1);
+    await expect(first).toHaveAttribute("aria-label", "2025-03-28, open 100 EUR, close 125 EUR");
+    await expect(second).toHaveAttribute("aria-label", "2025-03-30, open 125 EUR, close 105 EUR");
+    await expect(third).toHaveAttribute("aria-label", "2025-04-09, open 105 EUR, close 110 EUR");
+
+    await first.hover();
+    const tooltip = page.locator(".recharts-tooltip-wrapper");
+    await expect(tooltip).toContainText("High140 EUR");
+    await expect(tooltip).toContainText("Low100 EUR");
+    await expect(tooltip).toContainText("Change+25 EUR");
+
+    await page.getByRole("combobox", { name: "Time range" }).click();
+    await page.getByRole("option", { name: "Last week" }).click();
+    await expect(candles).toHaveCount(1);
+    await expect(third).toBeVisible();
+
+    await createTransactionInline(page, {
+      description: "Replenishment",
+      transfers: [{ from: "External", to: "Wallet", unit: "Euro", quantity: "7" }],
+    });
+    await gotoTab(page, "Analytics");
+    await page.getByRole("button", { name: "Daily candles" }).click();
+    await expect(candles).toHaveCount(2);
+    await expect(page.locator('[data-candle-day="2025-04-12"]'))
+      .toHaveAttribute("aria-label", "2025-04-12, open 110 EUR, close 117 EUR");
+  });
 });
