@@ -695,6 +695,32 @@ test("persists cached data and theme across reload while analytics remain availa
 test.describe("daily balance charts", () => {
   test.use({ timezoneId: "Europe/Berlin", locale: "en-US" });
 
+  test("fits full balance labels beside both charts on narrow screens", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await freezeDate(page, "2025-04-12T12:00:00.000Z");
+    await page.goto("/");
+    await loadDatabaseFile(page, await createDailyBalanceDatabaseFile(1_234_567_890_123.12));
+    await gotoTab(page, "Analytics");
+    await page.getByRole("combobox", { name: "Account" }).click();
+    await page.getByRole("option", { name: "External" }).click();
+
+    const labels = page.locator(".recharts-yAxis .recharts-cartesian-axis-tick-value");
+    await expect(labels.first()).toHaveText(/^-1,234,567,890,\d{3}/);
+    const labelsFit = () => labels.evaluateAll((ticks) =>
+      ticks.length > 0 && ticks.every((tick) => {
+        const chart = tick.closest("svg")!.getBoundingClientRect();
+        const label = tick.getBoundingClientRect();
+        return label.left >= chart.left && label.right <= Math.min(chart.right, window.innerWidth);
+      }),
+    );
+    await expect.poll(labelsFit).toBe(true);
+
+    await page.getByRole("button", { name: "Daily candles" }).click();
+    await expect(page.locator("[data-candle-day]")).toHaveCount(3);
+    await expect(labels.first()).toHaveText(/^-1,234,567,890,\d{3}/);
+    await expect.poll(labelsFit).toBe(true);
+  });
+
   test("uses elapsed days on the axis and shows the real daily balance range", async ({ page }) => {
     await freezeDate(page, "2025-04-12T12:00:00.000Z");
     await page.goto("/");

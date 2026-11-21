@@ -1,8 +1,12 @@
 import {Box, Paper, Typography, useMediaQuery, useTheme} from "@mui/material";
+import {useCallback, useLayoutEffect, useRef, useState} from "react";
 import {CartesianGrid, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis} from "recharts";
 import type {BalanceDay, Unit} from "./bridge/types";
 
 const millisecondsPerDay = 86_400_000;
+const minimumBalanceAxisWidth = 60;
+const balanceTickMargin = 6;
+const balanceTickSize = 6;
 
 function calendarDay(date: string) {
   return Date.parse(date) / millisecondsPerDay;
@@ -19,9 +23,43 @@ interface CandleShapeProps {
   yAxis: { scale: (balance: number) => number };
 }
 
+function BalanceAxisTick({ x, y, payload, className, tickFormatter, onMeasure }: {
+  x?: number;
+  y?: number;
+  payload?: { value: number };
+  className?: string;
+  tickFormatter?: (value: number) => string;
+  onMeasure: (element: SVGTextElement, width: number) => void;
+}) {
+  const ref = useRef<SVGTextElement>(null);
+  const label = payload ? (tickFormatter?.(payload.value) ?? String(payload.value)) : "";
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    onMeasure(element, element.getComputedTextLength());
+    return () => onMeasure(element, 0);
+  }, [label, onMeasure]);
+
+  return (
+    <text ref={ref} className={className} x={x} y={y} textAnchor="end" dominantBaseline="central" fontSize={12} fill="currentColor">
+      {label}
+    </text>
+  );
+}
+
 export function BalanceChart({ days, unit, mode }: { days: BalanceDay[]; unit?: Unit; mode: BalanceChartMode }) {
   const theme = useTheme();
   const touchInput = useMediaQuery("(hover: none)");
+  const tickWidths = useRef(new Map<SVGTextElement, number>());
+  const [balanceAxisWidth, setBalanceAxisWidth] = useState(minimumBalanceAxisWidth);
+  const measureBalanceTick = useCallback((element: SVGTextElement, width: number) => {
+    if (width === 0) tickWidths.current.delete(element);
+    else tickWidths.current.set(element, width);
+
+    const labelWidth = Math.ceil(Math.max(0, ...tickWidths.current.values()));
+    setBalanceAxisWidth(Math.max(minimumBalanceAxisWidth, labelWidth + balanceTickSize + balanceTickMargin + 4));
+  }, []);
   // An ISO local date is plotted as a calendar day, so daylight saving changes don't change its width.
   const points = days.map((point) => ({ ...point, day: calendarDay(point.date) }));
   const first = points[0];
@@ -69,7 +107,11 @@ export function BalanceChart({ days, unit, mode }: { days: BalanceDay[]; unit?: 
       type="number"
       domain={[lowest - padding, highest + padding]}
       allowDataOverflow
-      tickFormatter={(amount: number) => formatBalance.format(amount)}
+      width={balanceAxisWidth}
+      tickMargin={balanceTickMargin}
+      tickSize={balanceTickSize}
+      tickFormatter={formatBalance.format}
+      tick={<BalanceAxisTick onMeasure={measureBalanceTick} />}
     />
   );
   const tooltip = (
@@ -120,8 +162,8 @@ export function BalanceChart({ days, unit, mode }: { days: BalanceDay[]; unit?: 
   ];
 
   return (
-    <Paper sx={{ p: { xs: 1, sm: 2 }, height: 360 }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <Paper sx={{ p: { xs: 1, sm: 2 }, height: 360, overflowX: "auto" }}>
+      <ResponsiveContainer width="100%" height="100%" minWidth={balanceAxisWidth + 120}>
         {isCandles ? (
           <ScatterChart margin={{ top: 10, right: 16, bottom: 4 }}>
             <CartesianGrid stroke={theme.palette.divider} vertical={false} />
