@@ -106,6 +106,8 @@ export interface UnitsState {
     symbolError: boolean;
     mantissaError: boolean;
   };
+  editingUnitId: number | null;
+  isSaving: boolean;
   isLoading: boolean;
   error: string | null;
 }
@@ -200,7 +202,10 @@ export interface TabulaBridge {
   updateUnitName(value: string): void;
   updateUnitSymbol(value: string): void;
   updateUnitMantissaLength(value: string): void;
-  createUnit(): void;
+  saveUnit(): void;
+  beginEditingUnit(id: number): void;
+  cancelEditingUnit(): void;
+  deleteUnit(id: number): void;
   toggleShowArchived(showArchived: boolean): void;
   updateNewAccountName(value: string): void;
   updateNewAccountInPossession(value: boolean): void;

@@ -144,6 +144,8 @@ const emptyTransactionsState: TransactionsState = {
 const emptyUnitsState: UnitsState = {
   units: [],
   form: { name: "", symbol: "", mantissaLength: null, mantissaLengthInput: "", nameError: false, symbolError: false, mantissaError: false },
+  editingUnitId: null,
+  isSaving: false,
   isLoading: false,
   error: null,
 };
@@ -1134,28 +1136,63 @@ function AccountsPage({ bridge, state }: { bridge: TabulaBridge; state: Accounts
 }
 
 function UnitsPage({ bridge, state }: { bridge: TabulaBridge; state: UnitsState }) {
+  const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null);
+  const unitNameInput = useRef<HTMLInputElement>(null);
+  const editing = state.editingUnitId !== null;
+
+  useEffect(() => {
+    if (state.editingUnitId !== null) unitNameInput.current?.focus();
+  }, [state.editingUnitId]);
+
   return (
     <Stack spacing={3}>
       <SectionHeader title="Units" />
       {state.error ? <Alert severity="error">{state.error}</Alert> : null}
-      <Paper sx={{ p: 2 }}>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-          <TextField label="Name" value={state.form.name} error={state.form.nameError} onChange={(event) => bridge.updateUnitName(event.target.value)} />
-          <TextField label="Symbol" value={state.form.symbol} error={state.form.symbolError} onChange={(event) => bridge.updateUnitSymbol(event.target.value)} />
-          <TextField label="Mantissa length" value={state.form.mantissaLengthInput} error={state.form.mantissaError} onChange={(event) => bridge.updateUnitMantissaLength(event.target.value)} />
-          <Button variant="contained" onClick={() => bridge.createUnit()}>Create Unit</Button>
+      <Paper component="form" aria-label={editing ? "Edit unit" : "Create unit"} onSubmit={(event) => {
+        event.preventDefault();
+        bridge.saveUnit();
+      }} sx={{ p: 2 }}>
+        {editing && <Typography variant="h6" sx={{ mb: 2 }}>Edit unit</Typography>}
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ md: "flex-start" }}>
+          <TextField label="Name" inputRef={unitNameInput} disabled={state.isSaving} value={state.form.name} error={state.form.nameError} helperText={state.form.nameError ? "Enter a name" : undefined} onChange={(event) => bridge.updateUnitName(event.target.value)} />
+          <TextField label="Symbol" disabled={state.isSaving} value={state.form.symbol} error={state.form.symbolError} helperText={state.form.symbolError ? "Enter a symbol" : undefined} onChange={(event) => bridge.updateUnitSymbol(event.target.value)} />
+          <TextField label="Mantissa length" disabled={state.isSaving} value={state.form.mantissaLengthInput} error={state.form.mantissaError} helperText={state.form.mantissaError ? "Enter a nonnegative whole number" : undefined} onChange={(event) => bridge.updateUnitMantissaLength(event.target.value)} />
+          <Stack direction="row" spacing={1}>
+            {editing && <Button disabled={state.isSaving} onClick={() => bridge.cancelEditingUnit()}>Cancel</Button>}
+            <Button type="submit" variant="contained" disabled={state.isSaving}>{editing ? "Save changes" : "Create Unit"}</Button>
+          </Stack>
         </Stack>
       </Paper>
       <Stack spacing={2}>
         {state.units.map((unit) => (
           <Card key={unit.id}>
             <CardContent>
-              <Typography variant="h6">{unit.name}</Typography>
-              <Typography variant="body2" color="text.secondary">{unit.symbol} • mantissa {unit.mantissaLength}</Typography>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between" alignItems={{ sm: "center" }}>
+                <Box sx={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                  <Typography variant="h6">{unit.name}</Typography>
+                  <Typography variant="body2" color="text.secondary">{unit.symbol} • mantissa {unit.mantissaLength}</Typography>
+                </Box>
+                <Stack direction="row" spacing={1}>
+                  <Button aria-label={`Edit ${unit.name}`} disabled={editing || state.isSaving} startIcon={<EditIcon />} onClick={() => bridge.beginEditingUnit(unit.id)}>Edit</Button>
+                  <Button aria-label={`Delete ${unit.name}`} disabled={editing || state.isSaving} startIcon={<DeleteOutlineIcon />} onClick={() => setUnitToDelete(unit)}>Delete</Button>
+                </Stack>
+              </Stack>
             </CardContent>
           </Card>
         ))}
       </Stack>
+      <ConfirmationDialog
+        open={unitToDelete !== null}
+        action="Delete unit"
+        destructive
+        onCancel={() => setUnitToDelete(null)}
+        onConfirm={() => {
+          if (unitToDelete) bridge.deleteUnit(unitToDelete.id);
+          setUnitToDelete(null);
+        }}
+      >
+        “{unitToDelete?.name}” will be removed if it has no transfers or balances.
+      </ConfirmationDialog>
     </Stack>
   );
 }
@@ -1439,8 +1476,13 @@ function LookupAutocomplete<T extends Account | Unit>({
     if (!query || inputMatchesSelection) {
       return options;
     }
-    return options.filter((option) => option.name.toLowerCase().includes(query));
-  }, [inputValue, inputMatchesSelection, options]);
+    const matches = options.filter((option) => option.name.toLowerCase().includes(query) ||
+      ("symbol" in option && option.symbol.toLowerCase().includes(query)));
+    if (gridArea !== "unit") return matches;
+    const isExactMatch = (option: T) => option.name.toLowerCase() === query ||
+      ("symbol" in option && option.symbol.toLowerCase() === query);
+    return matches.sort((a, b) => Number(isExactMatch(b)) - Number(isExactMatch(a)));
+  }, [gridArea, inputValue, inputMatchesSelection, options]);
 
   useEffect(() => {
     setInputValue(selected?.name ?? "");
@@ -1485,6 +1527,13 @@ function LookupAutocomplete<T extends Account | Unit>({
       value={selected}
       inputValue={inputValue}
       getOptionLabel={(option) => option.name}
+      getOptionKey={(option) => option.id}
+      renderOption={({ key, ...props }, option) => (
+        <li key={key} {...props}>
+          <span>{option.name}</span>
+          {"symbol" in option && <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>({option.symbol})</Typography>}
+        </li>
+      )}
       isOptionEqualToValue={(option, optionValue) => option.id === optionValue.id}
       filterOptions={(available) => available}
       sx={{ ...registerFieldSx, gridArea }}

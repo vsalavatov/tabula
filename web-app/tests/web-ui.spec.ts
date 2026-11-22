@@ -70,7 +70,7 @@ async function selectAutocomplete(page: Page, label: string, option: string) {
   const input = page.getByRole("combobox", { name: label, exact: true });
   await input.click();
   await input.fill(option);
-  await page.getByRole("option", { name: option, exact: true }).click();
+  await page.getByRole("option").getByText(option, { exact: true }).click();
   await expect(input).toHaveValue(option);
 }
 
@@ -185,6 +185,72 @@ test("imports a database, edits through the inline register, uploads a backup, t
   await page.getByRole("button", { name: "Delete" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete backup" }).click();
   await expect(page.getByRole("button", { name: "Restore" })).toHaveCount(1);
+});
+
+test("finds a unit by symbol, updates existing entries, and only deletes it once unused", async ({ page }) => {
+  await page.goto("/");
+  await createUnit(page, "US Dollar", "USD", "2");
+  await createAccount(page, "Wallet");
+  await createAccount(page, "Bank");
+  await gotoTab(page, "Transactions");
+
+  await page.getByLabel("Transaction description").fill("Currency test");
+  await selectAutocomplete(page, "Transfer 1 from account", "Bank");
+  await page.getByLabel("Transfer 1 quantity").fill("12");
+  const unit = page.getByRole("combobox", { name: "Transfer 1 unit" });
+  await unit.fill("uSd");
+  await expect(page.getByRole("option", { name: "US Dollar (USD)", exact: true })).toBeVisible();
+  await unit.press("Tab");
+  await expect(unit).toHaveValue("US Dollar");
+  await selectAutocomplete(page, "Transfer 1 to account", "Wallet");
+  await page.getByRole("button", { name: "Save entry" }).click();
+  await expect(page.getByText("12 USD")).toBeVisible();
+
+  await gotoTab(page, "Units");
+  await page.getByRole("button", { name: "Edit US Dollar", exact: true }).click();
+  const editor = page.getByRole("form", { name: "Edit unit" });
+  await expect(editor.getByLabel("Name")).toHaveValue("US Dollar");
+  await expect(editor.getByLabel("Symbol")).toHaveValue("USD");
+  await editor.getByLabel("Name").fill("Updated Dollar");
+  await editor.getByLabel("Symbol").fill("USX");
+  await editor.getByLabel("Mantissa length").fill("-1");
+  await editor.getByRole("button", { name: "Save changes" }).click();
+  await expect(editor.getByText("Enter a nonnegative whole number")).toBeVisible();
+  await editor.getByLabel("Mantissa length").fill("3");
+  await editor.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("heading", { name: "Updated Dollar" })).toBeVisible();
+  await expect(page.getByText("USX • mantissa 3")).toBeVisible();
+
+  const deleteUnit = page.getByRole("button", { name: "Delete Updated Dollar" });
+  const confirmation = page.getByRole("dialog", { name: "Delete unit?" });
+  await deleteUnit.click();
+  await confirmation.getByRole("button", { name: "Delete unit", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Cannot delete Updated Dollar");
+
+  await gotoTab(page, "Transactions");
+  await expect(page.getByText("12 USX")).toBeVisible();
+  await page.getByRole("button", { name: "Delete Currency test" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete transaction" }).click();
+  await expect(page.getByText("Currency test")).toHaveCount(0);
+
+  await gotoTab(page, "Units");
+  await deleteUnit.click();
+  await confirmation.getByRole("button", { name: "Delete unit", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Updated Dollar" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create Unit" })).toBeEnabled();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Create Unit" })).toBeEnabled();
+  await expect(page.getByRole("heading", { name: "Updated Dollar" })).toHaveCount(0);
+});
+
+test("protects a unit with an imported balance and no transfers", async ({ page }) => {
+  await page.goto("/");
+  await loadDatabaseFile(page, await createUploadableDatabaseFile());
+  await gotoTab(page, "Units");
+  await page.getByRole("button", { name: "Delete Imported Euro" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete unit" }).click();
+  await expect(page.getByRole("alert")).toContainText("Cannot delete Imported Euro");
+  await expect(page.getByRole("heading", { name: "Imported Euro" })).toBeVisible();
 });
 
 test("creates a multi-transfer transaction with keyboard-first entry and Alt+Enter", async ({ page }) => {

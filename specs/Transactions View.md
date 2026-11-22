@@ -55,7 +55,7 @@ Date field typing behavior:
   * starting from `11-05-2026`, typing `1104` results in `11-04-2026`
 
 `from account`, `unit`, and `to account` fields are searchable dropdowns:
-* while user types, options are filtered by case-insensitive substring match
+* while user types, options are filtered by case-insensitive substring match. The unit field searches both name and symbol and prioritizes exact matches
 * on forward `Tab`, if typed text points to a different candidate, the highlighted option is applied before focus moves on (fallback: first filtered option)
 * on `Enter`, if typed text points to a different candidate, that candidate is applied and the key press is consumed (no transaction save)
 * when dropdown option highlight is moved with arrow keys, `Enter` and `Space` apply the highlighted option (not forcibly the first filtered one)

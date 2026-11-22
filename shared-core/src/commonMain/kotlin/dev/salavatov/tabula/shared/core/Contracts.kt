@@ -18,6 +18,8 @@ interface TransactionRepository {
 interface UnitRepository {
   fun getUnits(): StateFlow<List<MeasureUnit>>
   suspend fun createUnit(name: String, symbol: String, mantissaLength: Int): Long
+  suspend fun updateUnit(id: Long, name: String, symbol: String, mantissaLength: Int)
+  suspend fun deleteUnusedUnit(id: Long): Boolean
 }
 
 interface AccountRepository {

@@ -21,6 +21,8 @@ A Unit representation is a string that specifies the unit of measurement for the
 It can signify, e.g., a currency like "EUR", "USD", or anything else that is measurable.
 A Unit is associated with a mantissa length, i.e., how many decimal places are used to represent the quantity.
 
+The Units screen supports editing the name, symbol, and mantissa length of a unit. Existing transfers retain the same unit and quantity. A unit can be deleted after confirmation if it has no transfers and no nonzero account balances.
+
 ## Asset
 
 An Asset is a store of a specific Unit that belongs to an Account. It contains a Quantity of that Unit.

@@ -4,6 +4,9 @@ SELECT * FROM Assets WHERE account = ?;
 getAllAssets:
 SELECT * FROM Assets;
 
+deleteEmptyAssetsForUnit:
+DELETE FROM Assets WHERE unit = ? AND quantity = 0;
+
 createAsset:
 INSERT INTO Assets(account, unit, quantity) VALUES (?, ?, ?);
 

@@ -39,6 +39,21 @@ class UnitRepositoryImpl(
     db.resourcesQueries.getUnits(UnitRecord::deserialize).executeAsList().lastOrNull { it.name == name && it.symbol == symbol }?.id
       ?: -1L
   }
+
+  override suspend fun updateUnit(id: Long, name: String, symbol: String, mantissaLength: Int) = withContext(Dispatchers.Default) {
+    val db = databaseFlow.value ?: error("Database is not available")
+    db.resourcesQueries.updateUnit(name, symbol, mantissaLength.toLong(), id)
+  }
+
+  override suspend fun deleteUnusedUnit(id: Long): Boolean = withContext(Dispatchers.Default) {
+    val db = databaseFlow.value ?: error("Database is not available")
+    db.transactionWithResult {
+      if (db.resourcesQueries.unitHasUsage(id).executeAsOne() > 0) return@transactionWithResult false
+      db.assetsQueries.deleteEmptyAssetsForUnit(id)
+      db.resourcesQueries.deleteUnit(id)
+      true
+    }
+  }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -103,11 +118,7 @@ class TransactionRepositoryImpl(
     db.transactionWithResult {
       db.transactionsQueries.createTransaction(timestamp.toEpochMilliseconds(), description)
       val transaction = db.transactionsQueries.getCreatedTransaction(TransactionRecord::deserialize).executeAsOne()
-      transfers.forEach { transfer ->
-        db.transfersQueries.createTransfer(transaction.id, transfer.fromAccountId, transfer.toAccountId, transfer.unitId, transfer.quantity)
-        db.assetsQueries.applyDelta(transfer.fromAccountId, transfer.unitId, -transfer.quantity)
-        db.assetsQueries.applyDelta(transfer.toAccountId, transfer.unitId, transfer.quantity)
-      }
+      storeTransfers(db, transaction.id, transfers)
       transaction.id
     }
   }
@@ -122,11 +133,18 @@ class TransactionRepositoryImpl(
       }
       db.transactionsQueries.deleteTransfersByTransactionId(id)
       db.transactionsQueries.updateTransaction(timestamp.toEpochMilliseconds(), description, id)
-      transfers.forEach { transfer ->
-        db.transfersQueries.createTransfer(id, transfer.fromAccountId, transfer.toAccountId, transfer.unitId, transfer.quantity)
-        db.assetsQueries.applyDelta(transfer.fromAccountId, transfer.unitId, -transfer.quantity)
-        db.assetsQueries.applyDelta(transfer.toAccountId, transfer.unitId, transfer.quantity)
-      }
+      storeTransfers(db, id, transfers)
+    }
+  }
+
+  private fun storeTransfers(db: TabulaSharedDatabase, transactionId: Long, transfers: List<TransferInput>) {
+    transfers.map { it.unitId }.distinct().forEach { unitId ->
+      require(db.resourcesQueries.getUnit(unitId).executeAsOneOrNull() != null) { "Select an existing unit" }
+    }
+    transfers.forEach { transfer ->
+      db.transfersQueries.createTransfer(transactionId, transfer.fromAccountId, transfer.toAccountId, transfer.unitId, transfer.quantity)
+      db.assetsQueries.applyDelta(transfer.fromAccountId, transfer.unitId, -transfer.quantity)
+      db.assetsQueries.applyDelta(transfer.toAccountId, transfer.unitId, transfer.quantity)
     }
   }
 

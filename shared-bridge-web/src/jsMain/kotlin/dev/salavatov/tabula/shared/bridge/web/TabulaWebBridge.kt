@@ -215,7 +215,10 @@ class TabulaWebBridge(
   fun addTransferRow() = transactionPresenter.addTransferRow()
   fun loadOlderTransactions() = transactionPresenter.loadOlderTransactions()
   fun loadNewerTransactions() = transactionPresenter.loadNewerTransactions()
-  fun createUnit() = unitPresenter.createUnit { persistLocalSnapshot() }
+  fun saveUnit() = unitPresenter.saveUnit { persistLocalSnapshot() }
+  fun beginEditingUnit(id: Double) = unitPresenter.beginEditing(id.toLong())
+  fun cancelEditingUnit() = unitPresenter.cancelEditing()
+  fun deleteUnit(id: Double) = unitPresenter.deleteUnit(id.toLong()) { persistLocalSnapshot() }
   fun toggleShowArchived(showArchived: Boolean) = accountPresenter.toggleShowArchived(showArchived)
   fun updateNewAccountName(name: String) = accountPresenter.updateNewAccountName(name)
   fun updateNewAccountInPossession(inPossession: Boolean) = accountPresenter.updateNewAccountInPossession(inPossession)

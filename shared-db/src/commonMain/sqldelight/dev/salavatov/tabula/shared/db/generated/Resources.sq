@@ -6,3 +6,17 @@ SELECT * FROM Units WHERE id = ?;
 
 createUnit:
 INSERT INTO Units(name, symbol, mantissaLength) VALUES (?, ?, ?);
+
+updateUnit:
+UPDATE Units SET name = ?, symbol = ?, mantissaLength = ? WHERE id = ?;
+
+unitHasUsage:
+SELECT COUNT(*) FROM (
+  SELECT 1 FROM Transfers WHERE unit = :unitId
+  UNION ALL
+  SELECT 1 FROM Assets WHERE unit = :unitId AND quantity != 0
+  LIMIT 1
+);
+
+deleteUnit:
+DELETE FROM Units WHERE id = ?;

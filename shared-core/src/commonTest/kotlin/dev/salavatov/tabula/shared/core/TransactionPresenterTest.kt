@@ -399,6 +399,8 @@ class TransactionPresenterTest {
     override fun getUnits(): StateFlow<List<MeasureUnit>> = units
 
     override suspend fun createUnit(name: String, symbol: String, mantissaLength: Int): Long = 0L
+    override suspend fun updateUnit(id: Long, name: String, symbol: String, mantissaLength: Int) = Unit
+    override suspend fun deleteUnusedUnit(id: Long): Boolean = false
   }
 
   private data class CreatedTransaction(

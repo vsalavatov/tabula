@@ -231,7 +231,7 @@ class TransactionPresenter(
 
   fun commitDraft(onSuccess: suspend () -> Unit = {}) {
     val snapshot = _state.value
-    val validation = validateDraft(snapshot.draft)
+    val validation = validateDraft(snapshot.draft, snapshot.units)
     if (!validation.isValid) {
       _state.update { state ->
         state.copy(
@@ -415,7 +415,7 @@ class TransactionPresenter(
     }
   }
 
-  private fun validateDraft(draft: TransactionDraftState): DraftValidation {
+  private fun validateDraft(draft: TransactionDraftState, units: List<MeasureUnit>): DraftValidation {
     val parsedDate = parseDateInput(draft.dateInput)
     val dateError = parsedDate == null
     val descriptionError = draft.description.isBlank()
@@ -430,7 +430,7 @@ class TransactionPresenter(
     val validatedTransfers = draft.transfers.mapIndexed { index, transfer ->
       val fromAccountError = transfer.fromAccountId == null
       val quantityError = transfer.quantity == null
-      val unitError = transfer.unitId == null
+      val unitError = units.none { it.id == transfer.unitId }
       val toAccountError = transfer.toAccountId == null || transfer.toAccountId == transfer.fromAccountId
       if (focusTarget == null) {
         focusTarget = when {
@@ -575,8 +575,29 @@ class UnitPresenter(
     }
   }
 
-  fun createUnit(onSuccess: suspend () -> Unit = {}) {
-    val form = _state.value.form
+  fun beginEditing(id: Long) {
+    val state = _state.value
+    if (state.isSaving) return
+    val unit = state.units.firstOrNull { it.id == id } ?: return
+    _state.update {
+      it.copy(
+        editingUnitId = id,
+        form = UnitFormState(unit.name, unit.symbol, unit.mantissaLength, unit.mantissaLength.toString()),
+        error = null,
+      )
+    }
+  }
+
+  fun cancelEditing() {
+    _state.update {
+      if (it.isSaving) it else it.copy(editingUnitId = null, form = UnitFormState(), error = null)
+    }
+  }
+
+  fun saveUnit(onSuccess: suspend () -> Unit = {}) {
+    val state = _state.value
+    if (state.isSaving) return
+    val form = state.form
     val validation = UnitFormValidator.validate(form.name, form.symbol, form.mantissaLength)
     if (!validation.isValid) {
       _state.update {
@@ -590,14 +611,39 @@ class UnitPresenter(
       }
       return
     }
+    val id = state.editingUnitId
+    val mantissa = requireNotNull(form.mantissaLength)
+    val action = if (id == null) "create" else "update"
+    _state.update { it.copy(isSaving = true, error = null) }
     scope.launch {
       runCatching {
-        unitRepository.createUnit(form.name, form.symbol, form.mantissaLength ?: 0)
-        _state.update { it.copy(form = UnitFormState(), error = null) }
+        if (id == null) unitRepository.createUnit(form.name.trim(), form.symbol.trim(), mantissa)
+        else unitRepository.updateUnit(id, form.name.trim(), form.symbol.trim(), mantissa)
+        _state.update { it.copy(editingUnitId = null, form = UnitFormState()) }
         onSuccess()
       }.onFailure { error ->
-        _state.update { it.copy(error = "Failed to create unit: ${error.message}") }
+        _state.update { it.copy(error = "Failed to ${action} unit: ${error.message}") }
       }
+      _state.update { it.copy(isSaving = false) }
+    }
+  }
+
+  fun deleteUnit(id: Long, onSuccess: suspend () -> Unit = {}) {
+    val state = _state.value
+    if (state.isSaving || state.editingUnitId != null) return
+    val unit = state.units.firstOrNull { it.id == id } ?: return
+    _state.update { it.copy(isSaving = true, error = null) }
+    scope.launch {
+      runCatching {
+        if (unitRepository.deleteUnusedUnit(id)) {
+          onSuccess()
+        } else {
+          _state.update { it.copy(error = "Cannot delete ${unit.name} because it is used in transfers or has a balance.") }
+        }
+      }.onFailure { error ->
+        _state.update { it.copy(error = "Failed to delete unit: ${error.message}") }
+      }
+      _state.update { it.copy(isSaving = false) }
     }
   }
 }

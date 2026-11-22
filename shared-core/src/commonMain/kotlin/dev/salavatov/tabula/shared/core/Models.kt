@@ -183,6 +183,8 @@ data class UnitFormState(
 data class UnitUiState(
   val units: List<MeasureUnit> = emptyList(),
   val form: UnitFormState = UnitFormState(),
+  val editingUnitId: Long? = null,
+  val isSaving: Boolean = false,
   val isLoading: Boolean = false,
   val error: String? = null,
 )
