@@ -89,7 +89,21 @@ export function BalanceChart({ days, unit, mode }: { days: BalanceDay[]; unit?: 
     Math.min(min, isCandles ? point.low : point.close),
     Math.max(max, isCandles ? point.high : point.close),
   ], [first.open, first.open]);
-  const padding = (highest - lowest) * 0.08 || Math.max(Math.abs(highest) * 0.05, 10 ** -fractionDigits);
+  const smallestUnit = 10 ** -fractionDigits;
+  const padding = (highest - lowest) * 0.08 || Math.max(Math.abs(highest) * 0.05, smallestUnit);
+  const paddedLow = lowest - padding;
+  const paddedHigh = highest + padding;
+  const balanceResolution = Math.max(Math.abs(paddedLow), Math.abs(paddedHigh)) * Number.EPSILON;
+  // Aim for five intervals, rounding the step up to a multiple of 1, 2, or 5 at its decimal scale.
+  const targetStep = Math.max((paddedHigh - paddedLow) / 5, smallestUnit, balanceResolution);
+  const magnitude = 10 ** Math.floor(Math.log10(targetStep));
+  const scaledStep = targetStep / magnitude;
+  const balanceStep = (scaledStep <= 1 ? 1 : scaledStep <= 2 ? 2 : scaledStep <= 5 ? 5 : 10) * magnitude;
+  const firstBalanceTick = Math.floor(paddedLow / balanceStep);
+  const lastBalanceTick = Math.ceil(paddedHigh / balanceStep);
+  const balanceTicks = Array.from({ length: lastBalanceTick - firstBalanceTick + 1 }, (_, index) =>
+    (firstBalanceTick + index) * balanceStep,
+  );
   const xAxis = (
     <XAxis
       dataKey="day"
@@ -105,8 +119,9 @@ export function BalanceChart({ days, unit, mode }: { days: BalanceDay[]; unit?: 
     <YAxis
       dataKey="close"
       type="number"
-      domain={[lowest - padding, highest + padding]}
+      domain={[balanceTicks[0], balanceTicks[balanceTicks.length - 1]]}
       allowDataOverflow
+      ticks={balanceTicks}
       width={balanceAxisWidth}
       tickMargin={balanceTickMargin}
       tickSize={balanceTickSize}

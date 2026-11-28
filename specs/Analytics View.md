@@ -5,4 +5,6 @@ Select an account, a unit, and a time range to see the account's balance history
 - **Balance line** shows daily closing balances. The line stays flat between dates with transactions.
 - **Daily candles** shows a candle on each date with activity. The body spans the opening and closing balances. The wick spans the lowest and highest balances reached between transactions, including the opening and closing balances. Transfers in the same transaction are applied together. The tooltip shows the four balances and the net daily change.
 
+Both charts extend the balance axis to round tick values. Ticks are evenly spaced in steps such as 0.05, 10, or 500, depending on the visible balance range and the unit's precision.
+
 Future dates do not affect the chart. The chart includes all recorded transactions on today's date.

@@ -877,7 +877,10 @@ test.describe("daily balance charts", () => {
 
     await expect(page.getByRole("button", { name: "Balance line" })).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(".recharts-line-curve")).toBeVisible();
+    const balanceLabels = page.locator(".recharts-yAxis .recharts-cartesian-axis-tick-value");
+    await expect(balanceLabels).toHaveText(["90", "100", "110", "120", "130"]);
     await page.getByRole("button", { name: "Daily candles" }).click();
+    await expect(balanceLabels).toHaveText(["90", "100", "110", "120", "130", "140", "150"]);
 
     const candles = page.locator("[data-candle-day]");
     await expect(candles).toHaveCount(3);
