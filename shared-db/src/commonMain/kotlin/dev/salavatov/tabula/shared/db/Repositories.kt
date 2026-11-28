@@ -60,6 +60,29 @@ class UnitRepositoryImpl(
 class TransactionRepositoryImpl(
   private val databaseFlow: StateFlow<TabulaSharedDatabase?>,
 ) : TransactionRepository {
+  override suspend fun findTransactionSuggestions(prefix: String): List<TransactionSuggestion> = withContext(Dispatchers.Default) {
+    val key = descriptionSearchKey(prefix)
+    val db = databaseFlow.value ?: return@withContext emptyList()
+    if (key.isEmpty()) return@withContext emptyList()
+    // The last UTF-8 byte is never 0xff, so incrementing it gives an exclusive BLOB prefix bound.
+    val end = key.copyOf()
+    end[end.lastIndex] = (end.last() + 1).toByte()
+    db.transactionsQueries.findByDescriptionPrefix(key, end).executeAsList()
+      .sortedWith(compareByDescending<dev.salavatov.tabula.shared.db.generated.FindByDescriptionPrefix> { it.timestamp }.thenByDescending { it.id })
+      .map { row -> readSuggestion(db, row.id, row.description) }
+  }
+
+  override suspend fun getTransactionSuggestion(id: Long): TransactionSuggestion? = withContext(Dispatchers.Default) {
+    val db = databaseFlow.value ?: return@withContext null
+    val description = db.transactionsQueries.getTransactionById(id).executeAsOneOrNull()?.description ?: return@withContext null
+    readSuggestion(db, id, description)
+  }
+
+  private fun readSuggestion(db: TabulaSharedDatabase, id: Long, description: String): TransactionSuggestion =
+    TransactionSuggestion(id, description, db.transfersQueries.forTransaction(id, TransferRecord::deserialize).executeAsList().map {
+      SuggestedTransfer(it.accountFrom, it.accountTo, it.unit)
+    })
+
   override fun getTransactions(viewport: Flow<TransactionViewport>): Flow<TransactionWindow> = databaseFlow
     .filterNotNull()
     .flatMapLatest { db ->
@@ -116,7 +139,7 @@ class TransactionRepositoryImpl(
   override suspend fun createTransaction(description: String, timestamp: Instant, transfers: List<TransferInput>): Long = withContext(Dispatchers.Default) {
     val db = databaseFlow.value ?: error("Database is not available")
     db.transactionWithResult {
-      db.transactionsQueries.createTransaction(timestamp.toEpochMilliseconds(), description)
+      db.transactionsQueries.createTransaction(timestamp.toEpochMilliseconds(), description, descriptionSearchKey(description))
       val transaction = db.transactionsQueries.getCreatedTransaction(TransactionRecord::deserialize).executeAsOne()
       storeTransfers(db, transaction.id, transfers)
       transaction.id
@@ -132,7 +155,7 @@ class TransactionRepositoryImpl(
         db.assetsQueries.applyDelta(transfer.accountTo, transfer.unit, -transfer.delta)
       }
       db.transactionsQueries.deleteTransfersByTransactionId(id)
-      db.transactionsQueries.updateTransaction(timestamp.toEpochMilliseconds(), description, id)
+      db.transactionsQueries.updateTransaction(timestamp.toEpochMilliseconds(), description, descriptionSearchKey(description), id)
       storeTransfers(db, id, transfers)
     }
   }

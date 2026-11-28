@@ -1,0 +1,7 @@
+ALTER TABLE Transactions ADD COLUMN description_search_key BLOB;
+
+CREATE INDEX transactions_description_prefix
+ON Transactions(description_search_key, timestamp DESC, id DESC);
+
+CREATE INDEX transfers_by_transaction
+ON Transfers(transaction_, id);

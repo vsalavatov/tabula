@@ -63,19 +63,28 @@ class DbMigrations(private val driver: SqlDriver) {
   fun prepareDatabase(): TabulaSharedDatabase {
     val currentVersion = version
     val schemaVersion = TabulaSharedDatabase.Schema.version
+    val database = TabulaSharedDatabase(driver)
     if (currentVersion == 0L) {
       TabulaSharedDatabase.Schema.create(driver)
       version = schemaVersion
     } else {
       if (schemaVersion > currentVersion) {
         TabulaSharedDatabase.Schema.migrate(driver, currentVersion, schemaVersion)
+        if (currentVersion < 8L) database.transaction {
+          val queries = database.transactionsQueries
+          while (true) {
+            val batch = queries.getMissingDescriptionSearchKeys().executeAsList()
+            if (batch.isEmpty()) break
+            batch.forEach { queries.setDescriptionSearchKey(descriptionSearchKey(it.description), it.id) }
+          }
+        }
         version = schemaVersion
       }
     }
-    return TabulaSharedDatabase(driver)
+    return database
   }
 
-  private var version: Long
+  internal var version: Long
     get() = runCatching {
       driver.executeQuery(
         null,
@@ -91,10 +100,12 @@ class DbMigrations(private val driver: SqlDriver) {
         null,
       ).value
     }.getOrDefault(0L)
-    set(value) {
+    private set(value) {
       driver.execute(null, "PRAGMA user_version = $value;", 0, null)
     }
 }
+
+internal fun descriptionSearchKey(description: String): ByteArray = description.trim().lowercase().encodeToByteArray()
 
 internal fun formatAmount(value: Double, decimals: Int): String {
   val scale = 10.0.pow(decimals)

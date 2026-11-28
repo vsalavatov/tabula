@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 interface TransactionRepository {
+  suspend fun findTransactionSuggestions(prefix: String): List<TransactionSuggestion>
+  suspend fun getTransactionSuggestion(id: Long): TransactionSuggestion?
   fun getTransactions(viewport: Flow<TransactionViewport>): Flow<TransactionWindow>
   suspend fun getTransactionOffset(transactionId: Long): Int
   suspend fun getLatestTimestampOnDate(

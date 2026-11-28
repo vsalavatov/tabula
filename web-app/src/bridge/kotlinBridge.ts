@@ -4,6 +4,7 @@ import type {
   SettingsState,
   SyncState,
   TabulaBridge,
+  TransactionSuggestion,
   TransactionsState,
   UnitsState
 } from "./types";
@@ -343,6 +344,10 @@ export async function createKotlinBridge(): Promise<TabulaBridge> {
     cancelEditingTransaction: () => call("cancelEditingTransaction"),
     beginEditingTransaction: (id) => call("beginEditingTransaction", id),
     updateTransactionDescription: (value) => call("updateTransactionDescription", value),
+    async findTransactionSuggestions(prefix) {
+      return parseJson<TransactionSuggestion[]>(await call<Promise<string>>("findTransactionSuggestions", prefix));
+    },
+    applyTransactionSuggestion: (id) => call<Promise<void>>("applyTransactionSuggestion", id),
     updateTransactionDateInput: (value) => call("updateTransactionDateInput", value),
     stepTransactionDate: (days) => call("stepTransactionDate", days),
     updateTransferFromAccount: (index, value) => call("updateTransferFromAccount", index, value),

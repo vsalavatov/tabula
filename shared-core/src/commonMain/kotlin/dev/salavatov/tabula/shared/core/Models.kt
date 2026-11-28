@@ -14,6 +14,12 @@ data class Transaction(
   val transfers: List<Transfer>,
 )
 
+@Serializable
+data class SuggestedTransfer(val fromAccountId: Long, val toAccountId: Long, val unitId: Long)
+
+@Serializable
+data class TransactionSuggestion(val id: Long, val description: String, val transfers: List<SuggestedTransfer>)
+
 data class TransactionWindow(
   val transactions: List<Transaction> = emptyList(),
   val offset: Int = 0,
@@ -121,6 +127,7 @@ data class TransactionDraftState(
   val dateInput: String = currentDraftDateInput(),
   val selectedDateIso: String = currentDraftDateIso(),
   val dateError: Boolean = false,
+  val dateWasEdited: Boolean = false,
   val description: String = "",
   val descriptionError: Boolean = false,
   val transfers: List<TransferDraftState> = listOf(TransferDraftState()),

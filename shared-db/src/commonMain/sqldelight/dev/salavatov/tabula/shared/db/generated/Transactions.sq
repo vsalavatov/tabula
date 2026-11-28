@@ -1,5 +1,5 @@
 getTransactions:
-SELECT * FROM Transactions ORDER BY timestamp DESC;
+SELECT id, timestamp, description FROM Transactions ORDER BY timestamp DESC;
 
 getAccountBalanceChanges:
 SELECT t.timestamp, SUM(
@@ -69,22 +69,34 @@ WHERE timestamp >= ? AND timestamp < ?
   AND id != ?;
 
 createTransaction:
-INSERT INTO Transactions(timestamp, description) VALUES (?, ?);
+INSERT INTO Transactions(timestamp, description, description_search_key) VALUES (?, ?, ?);
 
 updateTransaction:
 UPDATE Transactions
-SET timestamp = ?, description = ?
+SET timestamp = ?, description = ?, description_search_key = ?
 WHERE id = ?;
+
+findByDescriptionPrefix:
+SELECT id, description, timestamp FROM Transactions
+WHERE description_search_key >= :prefix AND description_search_key < :prefixEnd
+ORDER BY description_search_key, timestamp DESC, id DESC
+LIMIT 40;
+
+getMissingDescriptionSearchKeys:
+SELECT id, description FROM Transactions WHERE description_search_key IS NULL LIMIT 256;
+
+setDescriptionSearchKey:
+UPDATE Transactions SET description_search_key = :searchKey WHERE id = :id;
 
 deleteTransaction:
 DELETE FROM Transactions
 WHERE id = ?;
 
 getCreatedTransaction:
-SELECT * FROM Transactions WHERE id = last_insert_rowid();
+SELECT id, timestamp, description FROM Transactions WHERE id = last_insert_rowid();
 
 getTransactionById:
-SELECT * FROM Transactions WHERE id = ?;
+SELECT id, timestamp, description FROM Transactions WHERE id = ?;
 
 deleteTransfersByTransactionId:
 DELETE FROM Transfers WHERE transaction_ = ?;

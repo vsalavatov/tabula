@@ -1,6 +1,5 @@
 package dev.salavatov.tabula.shared.db
 
-import app.cash.sqldelight.db.SqlDriver
 import dev.salavatov.tabula.shared.db.generated.TabulaSharedDatabase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,10 +10,20 @@ class BrowserDatabaseSession {
   private val _database = MutableStateFlow<TabulaSharedDatabase?>(null)
   val database: StateFlow<TabulaSharedDatabase?> = _database.asStateFlow()
 
-  suspend fun open(bytes: ByteArray? = null) {
+  suspend fun open(bytes: ByteArray? = null): Boolean {
+    val newDriver = SqlJsDriver.open(bytes)
+    val migrations = DbMigrations(newDriver)
+    val didUpgrade = bytes != null && migrations.version < TabulaSharedDatabase.Schema.version
+    val newDatabase = try {
+      migrations.prepareDatabase()
+    } catch (error: Throwable) {
+      newDriver.close()
+      throw error
+    }
     close()
-    driver = SqlJsDriver.open(bytes)
-    _database.value = createDatabase(driver as SqlDriver)
+    driver = newDriver
+    _database.value = newDatabase
+    return didUpgrade
   }
 
   suspend fun reconnect(bytes: ByteArray? = null) {

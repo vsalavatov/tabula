@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class TransactionPresenterTest {
   @Test
-  fun newDraftUsesLastTransactionDefaults() = runTest {
+  fun newDraftUsesLastTransactionDefaultsWithoutClearingTypedDescription() = runTest {
     val presenterScope = testPresenterScope(testScheduler)
     val fixture = PresenterFixture(
       transactions = listOf(
@@ -45,6 +45,8 @@ class TransactionPresenterTest {
       scope = presenterScope,
     )
     try {
+      assertEquals("", fixture.presenter.state.value.draft.description)
+      fixture.presenter.updateDescription("Type before history loads")
       advanceUntilIdle()
 
       val draft = fixture.presenter.state.value.draft
@@ -52,7 +54,7 @@ class TransactionPresenterTest {
       assertEquals(TransactionDraftMode.NEW, draft.mode)
       assertEquals("${today.dayOfMonth.toString().padStart(2, '0')}-${today.monthNumber.toString().padStart(2, '0')}-${today.year}", draft.dateInput)
       assertEquals(today.toString(), draft.selectedDateIso)
-      assertEquals("", draft.description)
+      assertEquals("Type before history loads", draft.description)
       assertEquals(1L, draft.transfers.single().fromAccountId)
       assertEquals(2L, draft.transfers.single().toAccountId)
       assertEquals(1L, draft.transfers.single().unitId)
@@ -302,6 +304,15 @@ class TransactionPresenterTest {
     val updated = mutableListOf<UpdatedTransaction>()
     val deleted = mutableListOf<Long>()
     private var nextId = (initialTransactions.maxOfOrNull { it.id } ?: 0L) + 1L
+
+    override suspend fun findTransactionSuggestions(prefix: String): List<TransactionSuggestion> =
+      transactions.value.filter { it.description.startsWith(prefix, ignoreCase = true) }.map { suggestion(it) }
+
+    override suspend fun getTransactionSuggestion(id: Long): TransactionSuggestion? =
+      transactions.value.firstOrNull { it.id == id }?.let(::suggestion)
+
+    private fun suggestion(transaction: Transaction) = TransactionSuggestion(transaction.id, transaction.description,
+      transaction.transfers.map { SuggestedTransfer(it.accountFrom.id, it.accountTo.id, it.unit.id) })
 
     override fun getTransactions(viewport: Flow<TransactionViewport>): Flow<TransactionWindow> = combine(transactions, viewport) { currentTransactions, currentViewport ->
       val visibleTransactions = currentTransactions.drop(currentViewport.offset).take(currentViewport.limit)

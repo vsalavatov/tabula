@@ -47,11 +47,13 @@ class TransactionPresenter(
         val shouldRevealTransaction = pendingRevealId != null && transactions.any { it.id == pendingRevealId }
         _state.update { current ->
           val editingId = current.activeEditingTransactionId
+          val draft = current.draft
           val nextDraft = when {
             editingId != null && transactions.none { it.id == editingId } -> buildNewDraft()
-            editingId == null && current.groupedTransactions.isEmpty() && current.draft.mode == TransactionDraftMode.NEW ->
-              buildNewDraft(focusTarget = current.draft.focusTarget ?: nextFocus(TransactionField.DATE))
-            else -> current.draft
+            draft.mode == TransactionDraftMode.NEW && current.groupedTransactions.isEmpty() &&
+              transactions.isNotEmpty() && draft.transfers == listOf(TransferDraftState()) ->
+              draft.copy(transfers = listOf(nextNewEntryTransferDefaults()))
+            else -> draft
           }
           current.copy(
             visibleTransactions = transactions,
@@ -126,6 +128,54 @@ class TransactionPresenter(
     }
   }
 
+  suspend fun findSuggestions(prefix: String): List<TransactionSuggestion> {
+    if (prefix.isBlank() || _state.value.draft.mode != TransactionDraftMode.NEW) return emptyList()
+    val candidates = transactionRepository.findTransactionSuggestions(prefix)
+    val state = _state.value
+    return candidates.asSequence()
+      .filter { suggestionIsUsable(it, state) }
+      .distinctBy { it.description.trim().lowercase() to it.transfers }
+      .take(5)
+      .toList()
+  }
+
+  suspend fun applySuggestion(id: Long) {
+    val originalDraft = _state.value.draft
+    if (originalDraft.mode != TransactionDraftMode.NEW) return
+    val suggestion = transactionRepository.getTransactionSuggestion(id) ?: return
+    _state.update { state ->
+      val draft = state.draft
+      val prefix = draft.description.trim().lowercase()
+      if (draft != originalDraft || prefix.isEmpty() || !suggestionIsUsable(suggestion, state) ||
+        !suggestion.description.trim().lowercase().startsWith(prefix)
+      ) return@update state
+
+      val today = currentDate()
+      state.copy(
+        draft = draft.copy(
+          description = suggestion.description,
+          descriptionError = false,
+          dateInput = if (draft.dateWasEdited) draft.dateInput else formatDraftDateInput(today),
+          selectedDateIso = if (draft.dateWasEdited) draft.selectedDateIso else today.toString(),
+          dateError = draft.dateWasEdited && draft.dateError,
+          transfers = suggestion.transfers.map {
+            TransferDraftState(fromAccountId = it.fromAccountId, toAccountId = it.toAccountId, unitId = it.unitId)
+          },
+          focusTarget = nextFocus(TransactionField.QUANTITY),
+        ),
+        error = null,
+      )
+    }
+  }
+
+  private fun suggestionIsUsable(suggestion: TransactionSuggestion, state: TransactionUiState): Boolean =
+    suggestion.transfers.isNotEmpty() && suggestion.transfers.all { transfer ->
+      transfer.fromAccountId != transfer.toAccountId &&
+        state.accounts.any { it.id == transfer.fromAccountId && !it.isArchived } &&
+        state.accounts.any { it.id == transfer.toAccountId && !it.isArchived } &&
+        state.units.any { it.id == transfer.unitId }
+    }
+
   fun updateDateInput(dateInput: String) {
     updateDraft { draft ->
       val parsed = parseDateInput(dateInput)
@@ -133,6 +183,7 @@ class TransactionPresenter(
         dateInput = dateInput,
         selectedDateIso = parsed?.toString() ?: draft.selectedDateIso,
         dateError = dateInput.isNotBlank() && parsed == null,
+        dateWasEdited = draft.dateWasEdited || dateInput != draft.dateInput,
       )
     }
   }
@@ -147,6 +198,7 @@ class TransactionPresenter(
         dateInput = formatDraftDateInput(nextDate),
         selectedDateIso = nextDate.toString(),
         dateError = false,
+        dateWasEdited = true,
         focusTarget = nextFocus(TransactionField.DATE),
       )
     }

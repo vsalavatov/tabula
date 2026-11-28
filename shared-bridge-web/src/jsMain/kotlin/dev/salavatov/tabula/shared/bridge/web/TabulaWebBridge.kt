@@ -126,7 +126,7 @@ class TabulaWebBridge(
 
   init {
     scope.launch {
-      session.open(cache.readBytes())
+      if (session.open(cache.readBytes())) persistLocalSnapshot()
     }
     scope.launch {
       if (auth.restoreCachedSession()) {
@@ -198,8 +198,8 @@ class TabulaWebBridge(
     scope.launch {
       runCatching {
         val bytes = base64.base64ToByteArray()
-        cache.writeBytes(bytes)
         session.open(bytes)
+        persistLocalSnapshot()
       }.onSuccess {
         resolve(Unit)
       }.onFailure {
@@ -210,6 +210,12 @@ class TabulaWebBridge(
   fun beginNewTransactionEntry() = transactionPresenter.beginNewEntry()
   fun cancelEditingTransaction() = transactionPresenter.cancelEditing()
   fun updateTransactionDescription(description: String) = transactionPresenter.updateDescription(description)
+  fun findTransactionSuggestions(prefix: String): Promise<String> = scope.promise {
+    json.encodeToString(transactionPresenter.findSuggestions(prefix))
+  }
+  fun applyTransactionSuggestion(id: Double): Promise<Unit> = scope.promise {
+    transactionPresenter.applySuggestion(id.toLong())
+  }
   fun updateTransactionDateInput(dateInput: String) = transactionPresenter.updateDateInput(dateInput)
   fun stepTransactionDate(days: Int) = transactionPresenter.stepDate(days)
   fun addTransferRow() = transactionPresenter.addTransferRow()
@@ -369,8 +375,8 @@ private class DriveBackupManager(
 
   override suspend fun restoreBackup(fileId: String) {
     val bytes = DriveApi(auth).downloadBackup(fileId)
-    cache.writeBytes(bytes)
     session.open(bytes)
+    cache.writeBytes(session.exportBytes())
   }
 
   override suspend fun downloadBackup(fileId: String) {
@@ -418,8 +424,8 @@ private class MockBackupManager(
   override suspend fun restoreBackup(fileId: String) {
     ensureSignedIn()
     val bytes = backups[fileId]?.bytes ?: error("Mock backup not found: $fileId")
-    cache.writeBytes(bytes)
     session.open(bytes.copyOf())
+    cache.writeBytes(session.exportBytes())
   }
 
   override suspend fun downloadBackup(fileId: String) {

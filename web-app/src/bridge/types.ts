@@ -36,6 +36,12 @@ export interface Transaction {
   transfers: Transfer[];
 }
 
+export interface TransactionSuggestion {
+  id: number;
+  description: string;
+  transfers: Array<{ fromAccountId: number; toAccountId: number; unitId: number }>;
+}
+
 export type TransactionListItem =
   | { dateIso: string; label: string }
   | { transaction: Transaction; isEditing: boolean };
@@ -187,6 +193,8 @@ export interface TabulaBridge {
   cancelEditingTransaction(): void;
   beginEditingTransaction(id: number): void;
   updateTransactionDescription(value: string): void;
+  findTransactionSuggestions(prefix: string): Promise<TransactionSuggestion[]>;
+  applyTransactionSuggestion(id: number): Promise<void>;
   updateTransactionDateInput(value: string): void;
   stepTransactionDate(days: number): void;
   updateTransferFromAccount(index: number, value: number | null): void;

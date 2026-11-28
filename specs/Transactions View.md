@@ -64,9 +64,17 @@ Date field typing behavior:
 
 Transaction save via keyboard:
 * pressing `Enter` in any field saves the transaction draft
-* exception: in searchable dropdown fields, when `Enter` is used to apply a typed candidate as described above, it does not save
+* exception: when `Enter` applies a dropdown suggestion or a transaction suggestion, it does not save
 
 After successful save, editor is reset for the next entry and focus returns to the date field.
+
+### Transaction suggestions
+
+In a new entry, suggestions can appear after the first non-space character of a historical description. After a short pause, the description field offers up to five suggestions with the source, destination, and unit for each transfer. Matching is case-insensitive. Identical descriptions with the same transfer setup appear once. Suggestions with archived accounts are omitted.
+
+Click a suggestion to fill the description and transfer setup. With the list open, `Enter` or `Tab` applies the highlighted suggestion or the first one by default. After navigating with the arrows, `Space` also applies the highlighted suggestion. Otherwise it types a space. The amounts start empty and focus moves to the first amount. The date uses today unless the draft date was changed manually. `Escape` closes the list. With the list closed, `Enter` saves the draft.
+
+Suggestions are local. SQLite searches a description prefix index and reads at most 40 matching transaction rows before ranking and deduplication.
 
 Use Cancel or `Escape` inside the inline editor to discard edits. Delete on a saved transaction opens a confirmation dialog.
 

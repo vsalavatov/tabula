@@ -5,6 +5,7 @@ import {
   createLongRegisterDatabaseFile,
   createMassiveHistoryDatabaseFile,
   createSavingsAutocompleteDatabaseFile,
+  createTransactionSuggestionsDatabaseFile,
   createUploadableDatabaseFile,
   createWindowedOlderDateDatabaseFile,
 } from "./support/testDatabase";
@@ -308,6 +309,87 @@ test("keeps actions accessible with many transfers on a narrow screen", async ({
   await expect(editor.getByLabel("Transfer 8 quantity")).toBeFocused();
 });
 
+test("applies the highlighted transaction suggestion with Enter and saves with Enter once closed", async ({ page }) => {
+  await freezeDate(page, "2025-04-12T12:00:00Z");
+  await page.goto("/");
+  await loadDatabaseFile(page, await createTransactionSuggestionsDatabaseFile());
+  await gotoTab(page, "Transactions");
+  await createTransactionInline(page, {
+    dateInput: "10-04-2025",
+    description: "Unrelated entry",
+    transfers: [{ from: "groceries", to: "external", unit: "Euro", quantity: "1" }],
+  });
+  await expect(page.getByLabel("Transaction date")).toHaveValue("10-04-2025");
+
+  const description = page.getByLabel("Transaction description");
+  const suggestions = page.getByRole("option");
+  await description.fill("unr");
+  await expect(suggestions).toHaveText([/Unrelated entry/]);
+  await description.fill(" ");
+  await expect(suggestions).toHaveCount(0);
+  await description.fill("L");
+  await expect(suggestions).toHaveCount(2);
+  await expect(suggestions.nth(0)).toHaveText(/Lieferando.*wallet → external · USD/);
+  await expect(suggestions.nth(1)).toHaveText(/Lieferando.*groceries → external · EUR/);
+  await description.press("Control+Enter");
+  await expect(description).toHaveValue("L");
+  await expect(suggestions).toHaveCount(2);
+  await description.press("Escape");
+  await expect(suggestions).toHaveCount(0);
+
+  await description.fill("l");
+  await expect(suggestions).toHaveCount(2);
+  await description.press("ArrowDown");
+  await description.press("Enter");
+  await expect(description).toHaveValue("Lieferando");
+  await expect(page.getByLabel("Transaction date")).toHaveValue("12-04-2025");
+  await expect(page.getByLabel("Transfer 1 from account")).toHaveValue("groceries");
+  await expect(page.getByLabel("Transfer 1 to account")).toHaveValue("external");
+  await expect(page.getByLabel("Transfer 1 unit", { exact: true })).toHaveValue("Euro");
+  const amount = page.getByLabel("Transfer 1 quantity");
+  await expect(amount).toHaveValue("");
+  await expect(amount).toBeFocused();
+  await amount.fill("17");
+  await description.press("Enter");
+  await expect(page.getByText("17 EUR", { exact: true })).toBeVisible();
+});
+
+for (const selection of ["click", "Enter", "Tab", "Space"] as const) {
+  test(`applying a split suggestion with ${selection} preserves the date and leaves all amounts empty`, async ({ page }) => {
+    await freezeDate(page, "2025-04-12T12:00:00Z");
+    await page.goto("/");
+    await loadDatabaseFile(page, await createTransactionSuggestionsDatabaseFile());
+    await gotoTab(page, "Transactions");
+
+    const date = page.getByLabel("Transaction date");
+    const description = page.getByLabel("Transaction description");
+    await date.fill("11-04-2025");
+    await description.fill("lief");
+    await expect(page.getByRole("option")).toHaveCount(2);
+    await description.fill("coff");
+    const suggestion = page.getByRole("option", { name: /Coffee split/ });
+    await expect(suggestion).toContainText("groceries → external · EUR");
+    await expect(suggestion).toContainText("wallet → external · USD");
+    if (selection === "click") {
+      await suggestion.click();
+    } else {
+      if (selection === "Space") {
+        await description.press("Space");
+        await expect(description).toHaveValue("coff ");
+        await description.press("ArrowDown");
+      }
+      await description.press(selection);
+    }
+    await expect(description).toHaveValue("Coffee split");
+    await expect(date).toHaveValue("11-04-2025");
+    await expect(page.getByLabel("Transfer 2 from account")).toHaveValue("wallet");
+    await expect(page.getByLabel("Transfer 2 unit", { exact: true })).toHaveValue("US Dollar");
+    await expect(page.getByLabel("Transfer 1 quantity")).toHaveValue("");
+    await expect(page.getByLabel("Transfer 2 quantity")).toHaveValue("");
+    await expect(page.getByLabel("Transfer 1 quantity")).toBeFocused();
+  });
+}
+
 test("new transaction entry uses current-date and session defaults with keyboard-first tab flow", async ({ page }) => {
   const seededDatabase = await createKeyboardDefaultsDatabaseFile();
   await freezeDate(page, "2025-04-06T12:00:00.000Z");
@@ -329,7 +411,7 @@ test("new transaction entry uses current-date and session defaults with keyboard
 
   await page.keyboard.press("Tab");
   await expect(descriptionField).toBeFocused();
-  await descriptionField.fill("food");
+  await descriptionField.fill("food today");
 
   await page.keyboard.press("Tab");
   await expect(fromStoreField).toBeFocused();

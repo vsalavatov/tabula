@@ -62,6 +62,7 @@ import type {
     ThemeMode,
     Transaction,
     TransactionField,
+    TransactionSuggestion,
     TransactionsState,
     Unit,
     UnitsState,
@@ -712,7 +713,7 @@ function TransactionDraftRow({
     });
     bridge.commitTransactionDraft();
   };
-  const handleDraftFieldKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+  const handleDraftFieldKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Enter" && !event.nativeEvent.isComposing && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       if (!event.repeat) handleCommit();
@@ -868,16 +869,11 @@ function TransactionDraftRow({
         </Stack>
 
         <Stack spacing={1.25}>
-          <TextField
-            fullWidth
-            placeholder="Description"
-            value={draft.description}
-            error={draft.descriptionError}
+          <TransactionDescriptionField
+            bridge={bridge}
+            state={state}
             onKeyDown={handleDraftFieldKeyDown}
-            onChange={(event) => bridge.updateTransactionDescription(event.target.value)}
-            slotProps={{ htmlInput: { "aria-label": "Transaction description" } }}
             inputRef={setFieldRef(fieldRefs, "DESCRIPTION", 0)}
-            sx={registerFieldSx}
           />
         </Stack>
 
@@ -981,6 +977,136 @@ function TransactionDraftRow({
         {state.error && <Alert severity="error" sx={{ gridColumn: "1 / -1", py: 0 }}>{state.error}</Alert>}
       </Box>
     </Box>
+  );
+}
+
+function TransactionDescriptionField({ bridge, state, onKeyDown, inputRef }: {
+  bridge: TabulaBridge;
+  state: TransactionsState;
+  onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void;
+  inputRef: (element: HTMLInputElement | null) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState<{ query: string; options: TransactionSuggestion[] } | null>(null);
+  const highlighted = useRef<TransactionSuggestion | null>(null);
+  const { draft } = state;
+  const options = result?.query === query && draft.mode === "NEW" ? result.options : [];
+
+  useEffect(() => {
+    if (draft.mode !== "NEW" || !query) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void bridge.findTransactionSuggestions(query).then((options) => {
+        if (!cancelled) setResult({ query, options });
+      }).catch(() => {
+        if (!cancelled) setResult({ query, options: [] });
+      });
+    }, 150);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [bridge, draft.mode, query]);
+
+  const closeSuggestions = () => {
+    highlighted.current = null;
+    setQuery("");
+    setResult(null);
+  };
+  const apply = (option: TransactionSuggestion) => {
+    closeSuggestions();
+    void bridge.applyTransactionSuggestion(option.id).catch(() => {});
+  };
+
+  if (draft.mode !== "NEW") {
+    return (
+      <TextField
+        fullWidth placeholder="Description" value={draft.description} error={draft.descriptionError}
+        onKeyDown={onKeyDown} onChange={(event) => bridge.updateTransactionDescription(event.target.value)}
+        slotProps={{ htmlInput: { "aria-label": "Transaction description" } }}
+        inputRef={inputRef} sx={registerFieldSx}
+      />
+    );
+  }
+
+  const accountName = (id: number) => state.accounts.find((account) => account.id === id)?.name;
+  const unitSymbol = (id: number) => state.units.find((unit) => unit.id === id)?.symbol;
+
+  return (
+    <Autocomplete<TransactionSuggestion, false, false, true>
+      freeSolo
+      autoHighlight
+      inputValue={draft.description}
+      value={null}
+      open={options.length > 0}
+      options={options}
+      filterOptions={(items) => items}
+      getOptionLabel={(option) => typeof option === "string" ? option : option.description}
+      getOptionKey={(option) => typeof option === "string" ? option : option.id}
+      onClose={closeSuggestions}
+      onBlur={closeSuggestions}
+      onHighlightChange={(_, option, reason) => {
+        highlighted.current = reason === "keyboard" ? option : null;
+      }}
+      onInputChange={(_, text, reason) => {
+        if (reason !== "input" && reason !== "clear") return;
+        highlighted.current = null;
+        bridge.updateTransactionDescription(text);
+        setQuery(text.trim());
+      }}
+      onChange={(_, option) => {
+        if (option && typeof option !== "string") apply(option);
+      }}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) {
+          event.defaultMuiPrevented = true;
+          return;
+        }
+        if (event.key === "Escape") closeSuggestions();
+        const hasModifier = event.ctrlKey || event.metaKey || event.altKey || event.shiftKey;
+        if (event.key === "Enter") {
+          event.defaultMuiPrevented = true;
+          if (hasModifier) event.preventDefault();
+        }
+        if (hasModifier) return;
+
+        const keyboardOption = options.find((option) => option.id === highlighted.current?.id);
+        const option = event.key === " " ? keyboardOption : keyboardOption ?? options[0];
+        if (option && (event.key === "Enter" || event.key === "Tab" || event.key === " ")) {
+          event.defaultMuiPrevented = true;
+          event.preventDefault();
+          if (!event.repeat) apply(option);
+          return;
+        }
+        if (event.key === "Enter") {
+          closeSuggestions();
+          onKeyDown(event);
+        }
+      }}
+      renderOption={({ key, ...props }, option) => (
+        <li key={key} {...props}>
+          <Box sx={{ minWidth: 0, overflowWrap: "anywhere" }}>
+            <Typography>{option.description}</Typography>
+            {option.transfers.map((transfer, index) => (
+              <Typography key={index} variant="body2" color="text.secondary">
+                {accountName(transfer.fromAccountId)} → {accountName(transfer.toAccountId)} · {unitSymbol(transfer.unitId)}
+              </Typography>
+            ))}
+          </Box>
+        </li>
+      )}
+      slotProps={{
+        popper: { sx: { minWidth: "min(24rem, calc(100vw - 24px))" } },
+        paper: { sx: { "& .MuiAutocomplete-listbox": { maxHeight: "min(50vh, 18rem)" } } },
+      }}
+      renderInput={(params) => (
+        <TextField
+          {...params} fullWidth placeholder="Description" error={draft.descriptionError} inputRef={inputRef}
+          slotProps={{ htmlInput: { ...params.inputProps, "aria-label": "Transaction description" } }}
+          sx={registerFieldSx}
+        />
+      )}
+    />
   );
 }
 

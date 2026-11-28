@@ -5,12 +5,14 @@ import app.cash.sqldelight.db.SqlCursor
 import app.cash.sqldelight.db.SqlDriver
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.promise
 import kotlin.js.Promise
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(DelicateCoroutinesApi::class)
 class DbMigrationsTest {
@@ -39,6 +41,40 @@ class DbMigrationsTest {
     assertMigrationPreservesData(version = 6, schemaStatements = version6DatabaseSchemaStatements())
   }
 
+  @Test
+  fun backfillsSearchKeysAndUsesIndexesOnLargeHistory(): Promise<Unit> = GlobalScope.promise {
+    val driver = SqlJsDriver.open()
+    try {
+      version6DatabaseSchemaStatements().map { it.replace("owning", "in_possession") }.forEach { execute(driver, it) }
+      execute(driver, "UPDATE Transactions SET description = '  ПИЦЦА  ' WHERE id = 1")
+      execute(driver, """
+        WITH RECURSIVE items(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM items WHERE n < 20000)
+        INSERT INTO Transactions(timestamp, description) SELECT n, 'Other ' || n FROM items
+      """.trimIndent())
+      execute(driver, "PRAGMA user_version = 7")
+
+      val db = DbMigrations(driver).prepareDatabase()
+      val repository = TransactionRepositoryImpl(MutableStateFlow(db))
+      assertTrue(repository.findTransactionSuggestions(" ").isEmpty())
+      val match = repository.findTransactionSuggestions("п").single()
+      assertEquals("  ПИЦЦА  ", match.description)
+      assertEquals(1L, match.transfers.single().unitId)
+      assertEquals(40, repository.findTransactionSuggestions("o").size)
+      assertEquals(0L, queryLong(driver, "SELECT COUNT(*) FROM Transactions WHERE description_search_key IS NULL"))
+
+      val searchPlan = queryValue(driver, """
+        EXPLAIN QUERY PLAN SELECT id, description, timestamp FROM Transactions
+        WHERE description_search_key >= X'6F' AND description_search_key < X'70'
+        ORDER BY description_search_key, timestamp DESC, id DESC LIMIT 40
+      """.trimIndent()) { it.getString(3) }
+      val transferPlan = queryValue(driver, "EXPLAIN QUERY PLAN SELECT * FROM Transfers WHERE transaction_ = 1 ORDER BY id") { it.getString(3) }
+      assertTrue(searchPlan.contains("SEARCH") && searchPlan.contains("transactions_description_prefix"), searchPlan)
+      assertTrue(transferPlan.contains("SEARCH") && transferPlan.contains("transfers_by_transaction"), transferPlan)
+    } finally {
+      driver.close()
+    }
+  }
+
   private suspend fun assertMigrationPreservesData(version: Long, schemaStatements: List<String>) {
     val driver = SqlJsDriver.open()
     try {
@@ -48,7 +84,7 @@ class DbMigrationsTest {
       val database = DbMigrations(driver).prepareDatabase()
       assertNotNull(database)
 
-      assertEquals(7L, queryLong(driver, "PRAGMA user_version"))
+      assertEquals(8L, queryLong(driver, "PRAGMA user_version"))
       assertEquals(1L, queryLong(driver, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'Units'"))
       assertEquals(0L, queryLong(driver, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'Resources'"))
       assertEquals(1L, queryLong(driver, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'Accounts'"))

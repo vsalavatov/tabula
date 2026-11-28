@@ -65,6 +65,23 @@ async function createDatabaseFile(name: string, seedDatabase: SeedDatabase): Pro
   }
 }
 
+export async function createTransactionSuggestionsDatabaseFile(): Promise<UploadableDatabaseFile> {
+  return createDatabaseFile("transaction-suggestions.db", (db) => {
+    db.exec(`
+      INSERT INTO Units (id, name, symbol, mantissaLength) VALUES (1, 'Euro', 'EUR', 2), (2, 'US Dollar', 'USD', 2);
+      INSERT INTO Accounts (id, name, owning, archived) VALUES
+        (1, 'groceries', 1, 0), (2, 'external', 0, 0), (3, 'wallet', 1, 0), (4, 'archived account', 1, 1);
+      INSERT INTO Transactions (id, timestamp, description) VALUES
+        (1, 1743760800000, 'Lieferando'), (2, 1743760800001, 'Lieferando'),
+        (3, 1743760800002, 'Lieferando'), (4, 1743760800003, 'Coffee split'),
+        (5, 1743760800004, 'Lieferando archived');
+      INSERT INTO Transfers (transaction_, accountFrom, accountTo, unit, delta) VALUES
+        (1, 1, 2, 1, 20), (2, 1, 2, 1, 30), (3, 3, 2, 2, 40),
+        (4, 1, 2, 1, 5), (4, 3, 2, 2, 6), (5, 4, 2, 1, 1);
+    `);
+  });
+}
+
 export async function createDailyBalanceDatabaseFile(openingFunds = 100): Promise<UploadableDatabaseFile> {
   return createDatabaseFile("daily-balances.db", (db) => {
     db.exec(`
